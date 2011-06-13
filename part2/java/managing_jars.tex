@@ -1,0 +1,168 @@
+%%--------------------------------------------------------------------
+%% Managing jars
+%%--------------------------------------------------------------------
+\section{Управление архивами \Java{}}
+
+Сборка и управление \Java{}\hyp{}архивами поднимают проблемы, отличные
+от тех, с которыми мы сталкивались при сборке библиотек
+\Clang{}/\Cplusplus{}. На это есть три причины. Во\hyp{}первых,
+элементы \Java{}\hyp{}архива адресуются относительным путём, поэтому
+точные имена файлов, передаваемых программе \utility{jar}, нужно
+тщательно контролировать. Во\hyp{}вторых, в \Java{}\hyp{}сообществе
+есть тенденция соединять архивы, чтобы всё приложение могло
+размещаться в единственном архиве. Наконец, \Java{}\hyp{}архивы могут
+содержать файлы, отличные от файлов классов, например, файл манифеста,
+файлы свойств и XML\hyp{}файлы.
+
+Базовая команда для создания \Java{}\hyp{}архива при помощи GNU
+\GNUmake{} выглядит следующим образом:
+
+{\footnotesize
+\begin{verbatim}
+JAR      := jar
+JARFLAGS := -cf
+
+$(FOO_JAR): реквизиты...
+    $(JAR) $(JARFLAGS) $@ $^
+\end{verbatim}
+}
+
+Программа \utility{jar} может принимать вместо имён файлов имена
+каталогов, в этом случае в архив будет помещено всё содержимое
+указанных каталогов. Это может быть очень удобно, особенно при
+использовании совместно с опцией \command{-C}, временно изменяющей
+текущий каталог:
+
+{\footnotesize
+\begin{verbatim}
+JAR      := jar
+JARFLAGS := -cf
+
+.PHONY: $(FOO_JAR)
+$(FOO_JAR):
+    $(JAR) $(JARFLAGS) $@ -C $(OUTPUT_DIR) com
+\end{verbatim}
+}
+
+Здесь файл архива объявлен абстрактной целью. Однако при повторном
+запуске \Makefile{}'а архив не будет создаваться заново, поскольку эта
+цель не имеет реквизитов. Как и в случае команды \utility{ar},
+описанной в одной из предыдущих глав, смысла в использовании флага
+обновления архива, \command{-u}, практически нет, поскольку эта
+операция занимает практически такое же (или даже большее) время, что и
+операция создания нового архива.
+
+\Java{}\hyp{}архив часто включает файл манифеста, в котором указан
+поставщик, API и номер версии. Простой файл манифеста может выглядеть
+следующим образом:
+
+{\footnotesize
+\begin{verbatim}
+Name: JAR_NAME
+Specification-Title: SPEC_NAME
+Implementation-Version: IMPL_VERSION
+Specification-Vendor: Generic Innovative Company, Inc.
+\end{verbatim}
+}
+
+Этот файл содержит три переменных, \variable{JAR\_NAME},
+\variable{SPEC\_NAME} и \variable{IMPL\_VERSION}, которые могут быть
+заменены реальными значениями при создании архива с помощью
+\utility{sed}, \utility{m4} или вашего любимого редактора потоков.
+Ниже приведена функция для обработки файла манифеста:
+
+{\footnotesize
+\begin{verbatim}
+MANIFEST_TEMPLATE := src/manifests/default.mf
+TMP_JAR_DIR       := $(call make-temp-dir)
+TMP_MANIFEST      := $(TMP_JAR_DIR)/manifest.mf
+
+# $(call add-manifest, jar, jar-name, manifest-file-opt)
+define add-manifest
+  $(RM) $(dir $(TMP_MANIFEST))
+  $(MKDIR) $(dir $(TMP_MANIFEST))
+  m4 --define=NAME="$(notdir $2)"            \
+     --define=IMPL_VERSION=$(VERSION_NUMBER) \
+     --define=SPEC_VERSION=$(VERSION_NUMBER) \
+     $(if $3,$3,$(MANIFEST_TEMPLATE))        \
+     > $(TMP_MANIFEST)
+  $(JAR) -ufm $1 $(TMP_MANIFEST)
+  $(RM) $(dir $(TMP_MANIFEST))
+endef
+\end{verbatim}
+}
+
+Функция \function{add\hyp{}manifest} оперирует файлом манифеста
+методом, подобным описанному выше. Сначала функция создаёт временный
+каталог, затем производит подстановку переменных в шаблоне файла
+манифеста. Затем функция обновляет архив и удаляет временный каталог.
+Обратите внимание на то, что последний аргумент функции является
+необязательным. Если путь к файлу манифеста не указан, функция
+использует значение переменной \variable{MANIFEST\_TEMPLATE}.
+
+В универсальном \Makefile{}'е эти операции привязаны к общей функции,
+осуществляющей составление явного правила для создания
+\Java{}\hyp{}архива:
+
+{\footnotesize
+\begin{verbatim}
+# $(call make-jar,jar-variable-prefix)
+define make-jar
+  .PHONY: $1 $$($1_name)
+  $1: $($1_name)
+  $$($1_name):
+      cd $(OUTPUT_DIR); \
+      $(JAR) $(JARFLAGS) $$(notdir $$@) $$($1_packages)
+      $$(call add-manifest, $$@, $$($1_name), $$($1_manifest))
+endef
+\end{verbatim}
+}
+
+Эта функция принимает один аргумент, префикс переменной \GNUmake{},
+который идентифицирует набор переменных, описывающих четыре параметра
+архива: имя цели, имя архива, пакеты архива и файл манифеста.
+Например, для создания архива \filename{ui.jar} мы напишем следующее:
+
+{\footnotesize
+\begin{verbatim}
+ui_jar_name     := $(OUTPUT_DIR)/lib/ui.jar
+ui_jar_manifest := src/com/company/ui/manifest.mf
+ui_jar_packages := src/com/company/ui \
+                   src/com/company/lib
+
+$(eval $(call make-jar,ui_jar))
+\end{verbatim}
+}
+
+Используя композицию имён переменных, мы можем сократить
+последовательность действий, выполняемых функцией, достигнув в тоже
+время гибкой её реализации.
+
+Если нам нужно создать много архивов, мы можем автоматизировать этот
+процесс, поместив список имён архивов в переменную:
+
+{\footnotesize
+\begin{verbatim}
+jar_list := server_jar ui_jar
+
+.PHONY: jars $(jar_list)
+jars: $(jar_list)
+
+$(foreach j, $(jar_list),\
+  $(eval $(call make-jar,$j)))
+\end{verbatim}
+}
+
+В некоторых случаях нам может понадобиться распаковать содержимое
+архива во временный каталог. Ниже представлен пример простой функции,
+реализующей это требование:
+
+{\footnotesize
+\begin{verbatim}
+# $(call burst-jar, jar-file, target-directory)
+define burst-jar
+  $(call make-dir,$2)
+  cd $2; $(JAR) -xf $1
+endef
+\end{verbatim}
+}

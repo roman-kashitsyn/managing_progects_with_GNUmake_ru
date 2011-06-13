@@ -1,0 +1,19 @@
+Managing projects with GNUmake
+==============================
+It is a translation of famous O'really book to russian.
+
+Build
+=====
+At the moment the build is possible only on UNIX systems. To build the
+book you need to have latex and mpost. If you have latex installed,
+just execute `make' in project directory.
+
+Licence
+=======
+The LaTeX code is distributed under GNU FDL.
+
+
+Contacts
+========
+If you have questions or want to contribute please contact me:
+roman.kashitsyn@gmail.com

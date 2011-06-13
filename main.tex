@@ -1,0 +1,64 @@
+\documentclass[openany,11pt]{book}
+\usepackage{alltt} % for code examples
+\usepackage[utf8x]{inputenc} % UTF8
+\usepackage[english,russian]{babel} % for russion language support
+\usepackage{makeidx}
+\usepackage{indentfirst}
+\usepackage{url}
+\usepackage[unicode]{hyperref}
+\usepackage{graphicx}
+\usepackage[hoffset=0.2in,textwidth=410pt]{geometry}
+\usepackage{hyphenat}
+
+\DeclareGraphicsRule{*}{mps}{*}{}
+%\usepackage{courier}
+%\renewcommand{\ttdefault}{pcr}
+\oddsidemargin=0pt
+\evensidemargin=0pt
+
+%% font settings
+%\renewcommand{\familydefault}{\sfdefault}
+
+%% style definitions
+\newcommand{\function}[1]{\textit{#1}}
+\newcommand{\filename}[1]{\textit{#1}}
+\newcommand{\utility}[1]{\textit{#1}}
+\newcommand{\target}[1]{\texttt{#1}}
+\newcommand{\command}[1]{\texttt{#1}}
+\newcommand{\directive}[1]{\texttt{#1}}
+\newcommand{\variable}[1]{\texttt{#1}}
+\newcommand{\newword}[1]{\emph{#1}}
+
+\newcommand{\subi}[1]{\(\sb{#1}\)}
+\newcommand{\trademark}{\(^{\rm TM}\)}
+%% common names
+\newcommand{\GNUmake}{\textit{make}}
+\newcommand{\Makefile}{\filename{ma\-ke\-fi\-le}}
+\newcommand{\makefile}[1]{\textit{make}-файл#1}
+\newcommand{\UNIX}{\textsc{Unix}}
+\newcommand{\POSIX}{\textsc{POSIX}}
+\newcommand{\Clang}{\textsc{C}}
+\newcommand{\Cplusplus}{\textsc{C++}}
+\newcommand{\Java}{Java}
+\newcommand{\FORTRAN}{\textsc{Fortran}}
+
+%% font definitions
+\newcommand{\Monospace}[1]{\texttt{#1}}
+\newcommand{\BoldMono}[1]{\textbf{\texttt{#1}}}
+\newcommand{\ItalicMono}[1]{\textit{\texttt{#1}}}
+
+\makeindex
+
+\author{Роберт Мекленбург}
+\title{Управление проектами с помощью GNU make}
+
+\begin{document}
+\maketitle
+\frontmatter
+\input{preface.tex}
+\tableofcontents
+\mainmatter
+\input{part1.tex}
+\input{part2.tex}
+\printindex
+\end{document}

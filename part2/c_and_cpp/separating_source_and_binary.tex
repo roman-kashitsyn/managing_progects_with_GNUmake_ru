@@ -1,0 +1,545 @@
+%%--------------------------------------------------------------------
+%% Separating source and binary
+%%--------------------------------------------------------------------
+\section{Разделение исходных и бинарных файлов}
+\label{sec:separating_source_and_binary}
+
+Итак, что же нам делать, если мы хотим поддерживать единственное
+дерево каталогов с исходным кодом, но множество платформ и множество
+сборок для каждой платформы, разделяя при необходимости деревья
+каталогов исходных и бинарных файлов? Изначально программа \GNUmake{}
+была написана для эффективной работы с файлами, находящимися в одном
+каталоге. И хотя со времени своего создания она очень изменилась,
+истоки забыты не были. Лучше всего \GNUmake{} работает с несколькими
+каталогами, если модифицируемые им файлы находятся в текущем каталоге
+или в его подкаталогах.
+
+%---------------------------------------------------------------------
+% The easy way
+%---------------------------------------------------------------------
+\subsection*{Простой способ}
+
+Наиболее простой способ заставить \GNUmake{} помещать бинарные файлы в
+отдельный каталог~--- это запустить \GNUmake{} из этого каталога.
+Доступ к выходным файлам осуществляется через относительные пути, как
+показано в предыдущей главе, в то время как исходные файлы должны быть
+указаны явно или при помощи \directive{vpath}. В любом случае, нам
+придётся ссылаться на каталог с исходными файлами из нескольких мест,
+поэтому нам нужно завести переменную для хранения пути к нему:
+
+{\footnotesize
+\begin{verbatim}
+SOURCE_DIR := ../mp3_player
+\end{verbatim}
+}
+
+Возьмём за основу наш предыдущий \Makefile{}. Функция
+\function{source-to-object} остаётся неизменной, а вот функцию
+\function{subdirectory} нужно изменить так, чтобы она учитывала
+относительные пути к исходным файлам.
+
+{\footnotesize
+\begin{verbatim}
+# $(call source-to-object, source-file-list)
+source-to-object = $(subst .c,.o,$(filter %.c,$1)) \
+                   $(subst .y,.o,$(filter %.y,$1)) \
+                   $(subst .l,.o,$(filter %.l,$1))
+# $(subdirectory)
+subdirectory = $(patsubst $(SOURCE_DIR)/%/module.mk,%, \
+                 $(word                                \
+                   $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+
+\end{verbatim}
+}
+
+Файлы, перечисленные в переменной \variable{MAKEFILE\_LIST}, будут
+включать относительные пути с исходным файлам. Таким образом, чтобы
+получить относительный путь к каталогу модуля, нам нужно помимо
+суффикса \filename{module.mk} отсечь и префикс.
+
+Далее, чтобы помочь \GNUmake{} найти исходные файлы, мы используем
+директиву \directive{vpath}:
+
+{\footnotesize
+\begin{verbatim}
+vpath %.y $(SOURCE_DIR)
+vpath %.l $(SOURCE_DIR)
+vpath %.c $(SOURCE_DIR)
+\end{verbatim}
+}
+
+Это позволит нам использовать для исходных файлов такие же простые
+относительные пути, как и для выходных файлов. Когда \GNUmake{} будет
+искать исходный файл и не сможет найти его в текущем каталоге, он
+будет сканировать каталог \variable{SOURCE\_DIR}. Далее, нам нужно
+обновить значение переменной \variable{include\_dirs}:
+
+{\footnotesize
+\begin{verbatim}
+include_dirs := lib $(SOURCE_DIR)/lib $(SOURCE_DIR)/include
+\end{verbatim}
+}
+
+В дополнение к каталогам исходных файлов это переменная включает
+подкаталог \filename{lib} дерева бинарных файлов, ведь именно туда
+будут попадать заголовочные файлы, составленные \utility{lex} и
+\utility{yacc}.
+
+Также нужно обновить директиву \directive{include} для получения
+доступа к файлам \filename{module.mk}, поскольку \GNUmake{} не
+использует директиву \directive{vpath} для поиска включаемых файлов:
+
+{\footnotesize
+\begin{verbatim}
+include $(patsubst %,$(SOURCE_DIR)/%/module.mk,$(modules))
+\end{verbatim}
+}
+
+Наконец, мы создаём каталоги для размещения выходных файлов:
+
+{\footnotesize
+\begin{verbatim}
+create-output-directories :=                    \
+    $(shell for f in $(modules);                \
+            do                                  \
+              $(TEST) -d $$f || $(MKDIR) $$f;   \
+            done)
+\end{verbatim}
+}
+
+Это присваивание создаёт пустую переменную, значение которой никогда
+не используется. Это даёт гарантию, что необходимые каталоги будут
+созданы до начала основной работы \GNUmake{}. Нам приходится самим
+создавать каталоги, так как \utility{lex}, \utility{yacc} и
+инструменты автоматической генерации зависимостей не сделают этого за
+нас.
+
+Ещё один способ убедиться в том, что необходимые каталоги созданы~---
+добавить эти каталоги в качестве реквизитов файлов зависимостей (эти
+файлы имеют расширение \filename{.d}). Однако это плохая идея, так как
+каталог на самом деле не является реквизитом. Файлы \utility{yacc},
+\utility{lex} или файлы зависимостей не зависят от \emph{содержимого}
+каталога, и не должны создаваться заново только от того, что
+временн\'{а}я метка каталога изменилась. На самом деле это будет
+источником неэффективности в случае добавления или удаления файлов из
+каталога, содержащего выходные файлы.
+
+Изменения, которые нужно сделать в файле \filename{module.mk}, ещё
+проще:
+
+{\footnotesize
+\begin{verbatim}
+local_src := $(addprefix $(subdirectory)/,playlist.y scanner.l)
+
+$(eval $(call make-library, $(subdirectory)/libdb.a, $(local_src)))
+
+.SECONDARY: $(call generated-source, $(local_src))
+
+$(subdirectory)/scanner.d: $(subdirectory)/playlist.d
+\end{verbatim}
+}
+
+Эта версия не использует функцию \function{wildcard} для определения
+исходных файлов. Пусть восстановление этого функционала станет
+упражнением для читателя. В первоначальном варианте был небольшой
+сбой. Когда я запустил этот \Makefile{} я обнаружил, что файл
+зависимостей \filename{scanner.d} был создан до файла
+\filename{playlist.h}, от которого он зависит. Эта зависимость не была
+отражена в исходном \Makefile{}'е, однако по счастливой случайности
+всё работало правильно. Правильное определение \emph{всех}
+зависимостей является трудной задачей даже для небольших проектов.
+
+Если предположить, что исходные файлы находятся в подкаталоге
+\filename{mp3\_player}, то сборка проекта будет осуществляться
+следующим образом:
+
+{\footnotesize
+\begin{alltt}
+\$ \textbf{mkdir mp3\_player\_out}
+\$ \textbf{cd mp3\_player\_out}
+\$ \textbf{make --file=../mp3\_player/makefile}
+\end{alltt}
+}
+
+Наш \Makefile{} правилен и хорошо работает, однако немного раздражает
+то, что приходится изменять каталог и добавлять опцию
+\command{-{}-file} (\command{-f}). Эту проблему можно решить с помощью
+простого сценария:
+
+{\footnotesize
+\begin{verbatim}
+#! /bin/bash
+if [[ ! -d $OUTPUT_DIR ]]
+then
+  if ! mkdir -p $OUTPUT_DIR
+  then
+    echo "Cannot create output directory" > /dev/stderr
+  exit 1
+  fi
+fi
+
+cd $OUTPUT_DIR
+make --file=$SOURCE_DIR/makefile "$@"
+\end{verbatim}
+}
+
+Этот сценарий подразумевает, что каталог с исходными файлами и каталог
+выходных файлов хранятся в переменных окружения \variable{SOURCE\_DIR}
+и \variable{OUTPUT\_DIR} соответственно. Это является обычной
+практикой, позволяющей разработчикам легко переключать деревья
+каталогов, не печатая при этом пути слишком часто.
+
+Наш \Makefile{} не содержит никаких средств, позволяющих запретить
+разработчикам выполнять \Makefile{} из каталога с исходными файлами.
+Это частая ошибка, и некоторые командные сценарии могут вести себя
+неправильно. Например, цель \target{clean}:
+
+{\footnotesize
+\begin{verbatim}
+.PHONY: clean
+clean:
+    $(RM) -r *
+\end{verbatim}
+}
+
+{\flushleft удалит всё дерево каталогов с исходным кодом пользователя!
+Благоразумным решением является добавление соответствующей проверки
+в самом начале выполнения \Makefile{}'а. Ниже приведён возможный
+вариант такой проверки:}
+
+{\footnotesize
+\begin{verbatim}
+$(if $(filter $(notdir $(SOURCE_DIR)),$(notdir $(CURDIR))),\
+  $(error Пожалуйста, запустите makefile из бинарного дерева каталогов.))
+\end{verbatim}
+}
+
+Этот код проверяет совпадение имени текущего рабочего каталога
+\command{(\$(notdir \$(CURDIR)))} с именем каталога, содержащего
+исходный код: \command{(\$(notdir \$(SOURCE\_DIR)))}. Если эти два
+выражения совпадают, выводится сообщение об ошибке, и выполнение
+\GNUmake{} прекращается. Поскольку результатом вычисления функций
+\function{if} и \function{error} является пустая строка, мы можем
+поместить эти две строчки кода сразу после определения переменной
+\variable{SOURCE\_DIR}.
+
+%---------------------------------------------------------------------
+% The hard way
+%---------------------------------------------------------------------
+\subsection*{Сложный способ}
+
+Некоторые разработчики находят необходимость перемещения в дерево
+каталогов, содержащих бинарные файлы, настолько раздражающей, что
+готовы проделать огромную работу для того, чтобы этого избежать. Или,
+возможно, разработчик \Makefile{}'а использует среду, в которой
+использование сценариев\hyp{}обёрток или псевдонимов программ
+недопустимо.  В любом случае, можно изменить \Makefile{} таким
+образом, чтобы была возможность производить запуск \GNUmake{} из
+дерева каталогов, содержащих исходный код, и помещать бинарные файлы в
+другое дерево каталогов с помощью добавления к путям выходных файлов
+соответствующих префиксов. Обычно в этом случае я использую абсолютные
+пути, поскольку такой подход предоставляет больше гибкости, хотя и
+обостряет проблему конечности длины командной строки. Для исходных
+файлов используются простые относительные пути (они вычисляются
+относительно каталога, в котором располагается \Makefile{}).
+
+Следующий пример содержит модифицированный \Makefile{}, позволяющий
+запускать \GNUmake{} из каталога с исходным кодом и записывающий
+бинарные файлы в отдельное дерево каталогов:
+
+{\footnotesize
+\begin{verbatim}
+SOURCE_DIR := /test/book/examples/ch07-separate-binaries-1
+BINARY_DIR := /test/book/out/mp3_player_out
+
+# $(call source-dir-to-binary-dir, directory-list)
+source-dir-to-binary-dir = $(addprefix $(BINARY_DIR)/, $1)
+
+# $(call source-to-object, source-file-list)
+source-to-object = $(call source-dir-to-binary-dir,  \
+                     $(subst .c,.o,$(filter %.c,$1)) \
+                     $(subst .y,.o,$(filter %.y,$1)) \
+                     $(subst .l,.o,$(filter %.l,$1)))
+# $(subdirectory)
+subdirectory = $(patsubst %/module.mk,%,  \
+                 $(word                   \
+                   $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
+
+# $(call make-library, library-name, source-file-list)
+define make-library
+  libraries += $(BINARY_DIR)/$1
+  sources   += $2
+  $(BINARY_DIR)/$1: $(call source-dir-to-binary-dir,  \
+                      $(subst .c,.o,$(filter %.c,$2)) \
+                      $(subst .y,.o,$(filter %.y,$2)) \
+                      $(subst .l,.o,$(filter %.l,$2)))
+      $(AR) $(ARFLAGS) $$@ $$^
+endef
+
+# $(call generated-source, source-file-list)
+generated-source = $(call source-dir-to-binary-dir,   \
+                     $(subst .y,.c,$(filter %.y,$1))  \
+                     $(subst .y,.h,$(filter %.y,$1))  \
+                     $(subst .l,.c,$(filter %.l,$1))) \
+                   $(filter %.c,$1)
+
+# $(compile-rules)
+define compile-rules
+  $(foreach f, $(local_src),\
+  $(call one-compile-rule,$(call source-to-object,$f),$f))
+endef
+
+# $(call one-compile-rule, binary-file, source-files)
+define one-compile-rule
+  $1: $(call generated-source,$2)
+      $(COMPILE.c) -o $$@ $$<
+
+  $(subst .o,.d,$1): $(call generated-source,$2)
+      $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -M $$< | \
+      $(SED) 's,\($$(notdir $$*)\.o\) *:,$$(dir $$@)\1 $$@: ,' > $$@.tmp
+      $(MV) $$@.tmp $$@
+endef
+
+modules      := lib/codec lib/db lib/ui app/player
+programs     :=
+libraries    :=
+sources      :=
+
+objects      = $(call source-to-object,$(sources))
+dependencies = $(subst .o,.d,$(objects))
+
+include_dirs := $(BINARY_DIR)/lib lib include
+CPPFLAGS     += $(addprefix -I ,$(include_dirs))
+vpath %.h $(include_dirs)
+
+MKDIR := mkdir -p
+MV    := mv -f
+RM    := rm -f
+SED   := sed
+TEST  := test
+
+create-output-directories :=                                      \
+    $(shell for f in $(call source-dir-to-binary-dir,$(modules)); \
+            do                                                    \
+              $(TEST) -d $$f || $(MKDIR) $$f;                     \
+            done)
+
+all:
+
+include $(addsuffix /module.mk,$(modules))
+
+.PHONY: all
+all: $(programs)
+
+.PHONY: libraries
+libraries: $(libraries)
+
+.PHONY: clean
+clean:
+    $(RM) -r $(BINARY_DIR)
+
+ifneq "$(MAKECMDGOALS)" "clean"
+include $(dependencies)
+endif
+\end{verbatim}
+}
+
+В этой версии функция \function{source-to-object} модифицирована так,
+чтобы осуществлять исправление путей к бинарным файлам. Поскольку эта
+операция осуществляется несколько раз, реализуем её в виде функции:
+
+{\footnotesize
+\begin{verbatim}
+SOURCE_DIR := /test/book/examples/ch07-separate-binaries-1
+BINARY_DIR := /test/book/out/mp3_player_out
+
+# $(call source-dir-to-binary-dir, directory-list)
+source-dir-to-binary-dir = $(addprefix $(BINARY_DIR)/, $1)
+
+# $(call source-to-object, source-file-list)
+source-to-object = $(call source-dir-to-binary-dir,  \
+                     $(subst .c,.o,$(filter %.c,$1)) \
+                     $(subst .y,.o,$(filter %.y,$1)) \
+                     $(subst .l,.o,$(filter %.l,$1)))
+\end{verbatim}
+}
+
+Функция \function{make-library} изменена подобным образом, теперь она
+добавляет к выходным файлам префикс \variable{BINARY\_DIR}. Теперь мы
+используем предыдущую функции \function{subdirectory}, поскольку путь
+к каталогам с включаемыми файлами снова стал простым относительным
+путём. Есть одна небольшая загвоздка: ошибка в \GNUmake{} 3.80
+препятствует вызову функции \function{source-to-object} из новой
+версии функции \function{make-library}. Эта ошибка была исправлена в
+версии 3.81. Мы можем обойти эту ошибку, подставив вместо вызова
+функции \function{source-to-object} её тело.
+
+Рассмотрим теперь по-настоящему неуклюжую часть. Неявные правила не
+работают, если доступ к выходному файлу нельзя осуществить с помощью
+относительного пути. Например, основное правило компиляции
+\command{\%.o: \%.c} отлично работает, когда оба файла находятся в
+одном каталоге, или даже если исходный файл располагается в
+каком-нибудь подкаталоге, например, \filename{lib/codec/codec.c}.
+Если исходный файл располагается в удалённом каталоге, мы можем
+указать \GNUmake{} на необходимость его поиска при помощи директивы
+\directive{vpath}. Однако если объектный файл располагается в
+удалённом каталоге, \GNUmake{} не сможет определить местоположения
+этого файла, и цепочка правил будет нарушена. Единственный способ
+информировать \GNUmake{} о расположении выходного файла~--- это
+предоставить явное правило, соединяющее исходный и объектный файлы:
+
+{\footnotesize
+\begin{verbatim}
+$(BINARY_DIR)/lib/codec/codec.o: lib/codec/codec.c
+\end{verbatim}
+}
+
+Такая операция должна быть осуществлена для каждого объектного файла.
+
+Хуже того, эта пара не соответствует неявному правилу \command{\%.o:
+\%.c}. Это значит, что нам самим нужно предоставить командный
+сценарий, повторяющий правило встроенной базы правил, и, возможно,
+повторить этот сценарий много раз. Проблема также касается правила
+автоматического составления файлов зависимостей, которое мы
+используем. Добавление двух явных правил для каждого объектного файла,
+упоминающегося в \Makefile{}'е,~--- это кошмар для человека, который
+будет поддерживать программный продукт. Однако мы можем минимизировать
+дублирование кода, написав функцию для автоматического составления
+этих правил:
+
+{\footnotesize
+\begin{verbatim}
+# $(call one-compile-rule, binary-file, source-files)
+define one-compile-rule
+  $1: $(call generated-source,$2)
+      $(COMPILE.c) $$@ $$<
+
+  $(subst .o,.d,$1): $(call generated-source,$2)
+      $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -M $$< | \
+      $(SED) 's,\($$(notdir $$*)\.o\) *:,$$(dir $$@)\1 $$@: ,' > $$@.tmp
+      $(MV) $$@.tmp $$@
+endef
+\end{verbatim}
+}
+
+Первые две строки функции~--- это явные правила для описания
+зависимости объектного файла от исходного. Реквизит для этого правила
+должен быть вычислен при помощи функции \function{generated-source},
+описанной в главе~\ref{chap:managing_large_proj}. Если этого не
+сделать, исходные файлы \utility{lex} и \utility{yacc} вызовут ошибку
+компиляции при появлении в командном сценарии (после подстановки
+переменной \variable{\$\^}). Автоматические переменные экранированы,
+поэтому они будут вычислены позднее, при выполнении командного
+сценария (а не при выполнении функции \function{eval}). Функция
+\function{generated-source} была модифицирована так, чтобы возвращать
+пути к исходным файлам, написанным на языке \Clang{}, неизменными:
+
+{\footnotesize
+\begin{verbatim}
+# $(call generated-source, source-file-list)
+generated-source = $(call source-dir-to-binary-dir,   \
+                     $(subst .y,.c,$(filter %.y,$1))  \
+                     $(subst .y,.h,$(filter %.y,$1))  \
+                     $(subst .l,.c,$(filter %.l,$1))) \
+                   $(filter %.c,$1)
+\end{verbatim}
+}
+
+С учётом этого изменения функция будет возвращать результаты,
+представленные в следующей таблице:
+
+\begin{center}
+\begin{tabular}{ll}
+Аргумент & Результат \\
+\filename{lib/db/playlist.y} &
+\filename{/c/mp3\_player\_out/lib/db/playlist.c} \\
+ & \filename{/c/mp3\_player\_out/lib/db/playlist.h} \\
+\filename{lib/db/scanner.l} &
+\filename{/c/mp3\_player\_out/lib/db/scanner.c} \\
+\filename{app/player/play\_mp3.c} &
+\filename{app/player/play\_mp3.c} \\
+\end{tabular}
+\end{center}
+
+Явное правило для создания файлов зависимостей устроено точно так же.
+Ещё раз обратите внимание на экранирование (двойные символы доллара),
+которое требуется для правильной работы сценария.
+
+Теперь для каждого исходного файла в модуле нужно вычислить нашу новую
+функцию:
+
+{\footnotesize
+\begin{verbatim}
+# $(compile-rules)
+define compile-rules
+  $(foreach f, $(local_src),\
+    $(call one-compile-rule,$(call source-to-object,$f),$f))
+endef
+\end{verbatim}
+}
+
+Эта функция использует глобальную переменную \variable{local\_src},
+переопределяемую в файлах \filename{module.mk}. Более общий подход
+заключается в передаче списка файлов в качестве аргумента, однако в
+нашем проекте это делать не обязательно. Просто добавим эти функции в
+файлы \filename{module.mk}:
+
+{\footnotesize
+\begin{verbatim}
+local_src := $(subdirectory)/codec.c
+
+$(eval $(call make-library,$(subdirectory)/libcodec.a,$(local_src)))
+
+$(eval $(compile-rules))
+\end{verbatim}
+}
+
+Мы должны использовать функцию \function{eval}, так как результат
+вычисления функции \function{compile-rules} содержит более одной
+строки кода \GNUmake{}.
+
+Наконец, последняя сложность. Так как стандартные шаблонные правила
+компиляции исходных файлов \Clang{} не могут определить путь к
+выходным файлам, неявное правило для \utility{lex} и наше шаблонное
+правило для \utility{yacc} также не смогут этого сделать. Мы можем
+легко изменить эти правила самостоятельно. Поскольку они больше не
+применимы к остальным \utility{lex} и \utility{yacc} файлам, мы можем
+вынести их в файл \filename{lib/db/module.mk}:
+
+{\footnotesize
+\begin{verbatim}
+local_dir := $(BINARY_DIR)/$(subdirectory)
+local_src := $(addprefix $(subdirectory)/,playlist.y scanner.l)
+
+$(eval $(call make-library,$(subdirectory)/libdb.a,$(local_src)))
+
+$(eval $(compile-rules))
+
+.SECONDARY: $(call generated-source, $(local_src))
+
+$(local_dir)/scanner.d: $(local_dir)/playlist.d
+
+$(local_dir)/%.c $(local_dir)/%.h: $(subdirectory)/%.y
+    $(YACC.y) --defines $<
+    $(MV) y.tab.c $(dir $@)$*.c
+    $(MV) y.tab.h $(dir $@)$*.h
+
+$(local_dir)/scanner.c: $(subdirectory)/scanner.l
+    @$(RM) $@
+    $(LEX.l) $< > $@
+\end{verbatim}
+}
+
+Правила для \utility{lex} файлов реализованы как обычные явные
+правила, а правила для \utility{yacc} файлов~--- как шаблонные.
+Почему? Потому что правила для \utility{yacc} файлов используются для
+сборки двух целей: исходного и заголовочного файла на языке \Clang{}.
+Если мы используем обычное явное правило, \GNUmake{} выполнит
+командный сценарий дважды: один раз для исходного файла, а второй~---
+для заголовочного. Однако \GNUmake{} считает, что шаблонное правило,
+определяющее несколько целей, при выполнении обновляет обе цели.  Если
+возможно, вместо \Makefile{}'ов, приведённых в этом разделе, я буду
+использовать более простой подход, основанный на компиляции из дерева
+каталогов бинарных файлов. Как вы могли заметить, при попытке
+компиляции из дерева исходных файлов немедленно возникают трудности, и
+с ростом размеров проекта эти трудности только растут.

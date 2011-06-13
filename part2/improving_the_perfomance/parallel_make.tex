@@ -1,0 +1,230 @@
+%%--------------------------------------------------------------------
+%% Parallel make
+%%--------------------------------------------------------------------
+\section{Параллельное выполнение \GNUmake{}}
+
+Ещё одним способом увеличения производительности сборок является
+использование параллелизма, присущего проблеме обработки
+\makefile{а}. Большинство \makefile{ов} предназначены для
+осуществления задач, многие из которых можно обрабатывать параллельно,
+например, компиляцию исходных файлов \Clang{} в объектные или создание
+библиотек из объектных файлов. Более того, сама структура хорошо
+написанных \makefile{ов} предоставляет всю необходимую информацию для
+автоматического управления конкурирующими процессами.
+
+Следующий пример демонстрирует сборку нашей программы mp3 плеера с
+опцией управления задачами, \command{-{}-jobs=2} (или \command{-j
+  2}). На рисунке~\ref{fig:parallel_make} изображён тот же самый
+запуск \GNUmake{}, представленный с помощью диаграммы
+UML. Использование опции \command{-{}-jobs} сообщает \GNUmake{}, что
+при возможности следует обновлять параллельно две цели. Когда
+\GNUmake{} обновляет цели параллельно, он выводит команды в том
+порядке, в каком они выполняются, чередуя в выводе команды сборки
+разных целей. Это может затруднить чтение вывода \GNUmake{},
+осуществляющего параллельную сборку. Давайте внимательно рассмотрим
+вывод.
+
+{\footnotesize
+\begin{alltt}
+\$ \textbf{make -f ../ch07-separate-binaries/makefile --jobs=2}
+\end{alltt}
+\begin{verbatim}
+1  bison -y --defines ../ch07-separate-binaries/lib/db/playlist.y
+2  flex -t ../ch07-separate-binaries/lib/db/scanner.l >
+   lib/db/scanner.c
+3  gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include
+   -M ../ch07-separate-binaries/app/player/play_mp3.c | \
+   sed 's,\(play_mp3\.o\) *:,app/player/\1 app/player/play_mp3.d: ,'
+   > app/player/play_mp3.d.tmp
+4  mv -f y.tab.c lib/db/playlist.c
+5  mv -f y.tab.h lib/db/playlist.h
+6  gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include
+   -M ../ch07-separate-binaries/lib/codec/codec.c | \
+   sed 's,\(codec\.o\) *:,lib/codec/\1 lib/codec/codec.d: ,' >
+   lib/codec/codec.d.tmp
+7  mv -f app/player/play_mp3.d.tmp app/player/play_mp3.d
+8  gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include -M lib/db/playlist.c | \
+   sed 's,\(playlist\.o\) *:,lib/db/\1 lib/db/playlist.d: ,' >
+   lib/db/playlist.d.tmp
+9  mv -f lib/codec/codec.d.tmp lib/codec/codec.d
+10 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include
+   -M ../ch07-separate-binaries/lib/ui/ui.c | \
+   sed 's,\(ui\.o\) *:,lib/ui/\1 lib/ui/ui.d: ,' > lib/ui/ui.d.tmp
+11 mv -f lib/db/playlist.d.tmp lib/db/playlist.d
+12 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include
+   -M lib/db/scanner.c | \
+   sed 's,\(scanner\.o\) *:,lib/db/\1 lib/db/scanner.d: ,' >
+   lib/db/scanner.d.tmp
+13 mv -f lib/ui/ui.d.tmp lib/ui/ui.d
+14 mv -f lib/db/scanner.d.tmp lib/db/scanner.d
+15 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include -c
+   -o app/player/play_mp3.o
+   ../ch07-separate-binaries/app/player/play_mp3.c
+16 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include -c
+   -o lib/codec/codec.o
+   ../ch07-separate-binaries/lib/codec/codec.c
+17 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include -c
+   -o lib/db/playlist.o lib/db/playlist.c
+18 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include -c
+   -o lib/db/scanner.o lib/db/scanner.c
+   ../ch07-separate-binaries/lib/db/scanner.l: In function yylex:
+   ../ch07-separate-binaries/lib/db/scanner.l:9: warning:
+   return makes integer from pointer without a cast
+19 gcc -I lib -I ../ch07-separate-binaries/lib
+   -I ../ch07-separate-binaries/include -c
+   -o lib/ui/ui.o ../ch07-separate-binaries/lib/ui/ui.c
+20 ar rv lib/codec/libcodec.a lib/codec/codec.o
+   ar: creating lib/codec/libcodec.a
+   a - lib/codec/codec.o
+21 ar rv lib/db/libdb.a lib/db/playlist.o lib/db/scanner.o
+   ar: creating lib/db/libdb.a
+   a - lib/db/playlist.o
+   a - lib/db/scanner.o
+22 ar rv lib/ui/libui.a lib/ui/ui.o
+   ar: creating lib/ui/libui.a
+   a - lib/ui/ui.o
+23 gcc app/player/play_mp3.o lib/codec/libcodec.a lib/db/libdb.a
+   lib/ui/libui.a app/player/play_mp3
+\end{verbatim}
+}
+
+\begin{figure}
+\begin{center}
+\includegraphics{figures/parallel_make.eps}
+\end{center}
+\caption{Диаграмма выполнения \GNUmake{} при \command{-{}-jobs=2}}
+\label{fig:parallel_make}
+\end{figure}
+
+Сначала \GNUmake{} должен сгенерировать исходные файлы и файлы
+зависимостей. Два сгенерированных исходных файла являются выводом
+команд \utility{yacc} и \utility{lex} (команды 1 и 2
+соответственно). Третья команда генерирует файл зависимостей для
+\filename{play\_mp3.c}, её выполнение начинается до завершения
+генерации файлов зависимостей для \filename{playlist.c} или
+\filename{scanner.c} (командами 4, 5, 8, 9, 12 и 14). Таким образом,
+\GNUmake{} выполняет одновременно три задачи, не смотря на то, что
+опция командной строки требует одновременного выполнения двух задач.
+
+Команды \command{mv} (4 и 5) завершают генерацию исходного файла
+\filename{playlist.c}, начавшуюся первой командой. Команда 6 начинает
+генерацию очередного файла зависимостей. Каждый командный сценарий
+выполняется одним процессом \GNUmake{}, однако каждая цель и каждый
+реквизит формируют отдельный поток. Таким образом, команда 7,
+являющаяся второй командой сценария генерации файла зависимостей,
+исполняется тем же процессом \GNUmake{}, что и команда 3. Команда 6
+выполняется, скорее всего, процессом \GNUmake{}, порождённым сразу
+после выполнения команд 1-4-5 (обработки грамматики \utility{yacc}),
+но до генерации файла зависимостей, осуществляющейся командой 8.
+
+Определение зависимостей продолжается в том же духе вплоть до команды
+14. Все файлы зависимостей должны быть созданы до того, как \GNUmake{}
+сможет приступить к следующей фазе обработки~--- повторному считыванию
+\makefile{а}. Эта фаза образует естественную точку синхронизации.
+
+Как только завершается повторное чтение \makefile{а}, \GNUmake{} может
+снова продолжить параллельное выполнение сборки. В этот раз \GNUmake{}
+решает произвести компиляцию всех объектных файлов до того, как начать
+упаковывать их в библиотечные архивы. Этот порядок является
+недетерминированным. В следующий раз \GNUmake{} может собрать
+библиотеку \filename{libcodec.a} до того, как будет скомпилирован файл
+\filename{playlist.c}, поскольку библиотека не требует наличия никаких
+объектных файлов, кроме \filename{codec.o}. Таким образом, этот пример
+демонстрирует один порядок выполнения из множества возможных.
+
+Наконец, происходит компоновка программы. В нашем случае фаза
+компоновки также является естественной точкой синхронизации и всегда
+будет происходить в последнюю очередь. Если, однако, целью была не
+единственная программа, а множество программ или библиотек, последняя
+исполняемая инструкция может также быть другой.
+
+Запуск множества задач на многопроцессорном компьютере может иметь
+смысл, однако запуск более одной задачи на процессор может быть также
+очень полезным. Причина кроется в латентности дискового ввода/вывода и
+наличии кэширования на большинстве систем. Например, если процесс, к
+примеру, \utility{gcc}, ожидает поступления данных с диска, данные для
+других задач (таких как \utility{mv} или \utility{yacc}) могут
+располагаться в памяти компьютера. В этом случае лучшим выходом будет
+разрешить задаче обработку данных. В общем случае запуск \GNUmake{} с
+несколькими потоками выполнения на однопроцессорной системе
+практически всегда быстрее, чем запуск однопоточной сборки, и не так уж
+редко запуск трёх или даже четырёх потоков приводит к лучшему
+результату, чем при запуске двух потоков.
+
+Опция \command{-{}-jobs} может использоваться без аргумента. В этом
+случае \GNUmake{} порождает по одному потоку на каждую обновляемую
+цель. Как правило, это плохая идея, поскольку на переключение
+контекста может уходить настолько много времени, что итоговая
+производительность будет гораздо ниже, чем в случае однопоточного
+выполнения.
+
+Ещё одним способом управления множеством задач является использование
+средней загрузки системы как отправной точки. Средняя загрузка
+системы~--- это число запущенных задач, усреднённое за некоторый
+промежуток времени (как правило,1, 5 или 15 минут). Средняя загрузка
+выражается как число с плавающей точкой. Опция
+\command{-{}-load-average} (или \command{-l}) задаёт верхнюю границу
+числа порождаемых задач. Например, следующая команда:
+
+{\footnotesize
+\begin{alltt}
+\$ \textbf{make --load-average=3.5}
+\end{alltt}
+}
+
+сообщает \GNUmake{}, что потоки задач должны порождаться таким
+образом, чтобы средняя средняя загрузка системы была не более
+3.5. Если средняя загрузка выше, \GNUmake{} будет ждать, пока она не
+уменьшится до допустимых пределов, или пока все потоки не закончат
+свою работу.
+
+Когда вы пишите \makefile{} для параллельного выполнения, задача
+правильного указания реквизитов становятся ещё более важной. Как уже
+было замечено, когда опция \command{-{}-jobs} имеет значение 1, список
+реквизитов обычно вычисляется слева направо. Когда \command{-{}-jobs}
+больше 1, реквизиты могут вычисляться параллельно. Поэтому любые
+отношения зависимости, неявно присутствующие в порядке вычисления
+реквизитов, при параллельном запуске должны быть указаны явно.
+
+Ещё одной неприятностью при использовании параллельных сборок является
+проблема разделяемых временных файлов. Например, если каталог содержит
+файлы \filename{foo.y} и \filename{bar.y}, параллельный запуск
+\utility{yacc} может привести к тому, что один из экземпляров файла
+\filename{y.tab.c} или \filename{y.tab.h} перепишет другой. С подобной
+проблемой вы также сталкиваетесь при использовании в своих сценариях
+временных файлов с фиксированными именами.
+
+Ещё одной идиомой, препятствующей параллельному выполнению, является
+рекурсивный вызов \GNUmake{} из цикла \command{for}:
+
+{\footnotesize
+\begin{verbatim}
+dir:
+    for d in $(SUBDIRS);         \
+    do                           \
+        $(MAKE) --directory=$$d; \
+    done
+\end{verbatim}
+}
+
+Как уже упоминалось в разделе \nameref{sec:recursive_make} главы
+\ref{chap:managing_large_proj}, \GNUmake{} не может выполнять
+рекурсивные вызовы параллельно. Чтобы достичь параллельного
+выполнения, объявите каталоги абстрактными целями:
+
+{\footnotesize
+\begin{verbatim}
+.PHONY: $(SUBDIRS)
+$(SUBDIRS):
+    $(MAKE) --directory=$@
+\end{verbatim}
+}
