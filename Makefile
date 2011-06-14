@@ -1,4 +1,4 @@
-REVISION := 0.0.1
+REVISION := 0.1
 DOCUMENT := make3_book
 OUT      := $(DOCUMENT)_r$(REVISION).pdf
 README   := README
@@ -26,14 +26,14 @@ MPOST      := mpost
 MAKE_INDEX := makeindex
 RM_FLAGS   := -rf
 
-.PHONY: release count clean
-
 $(MAIN).pdf: $(tex_files) $(MAIN).ind $(figures)
 	$(LATEX) $(MAIN).tex
 
+.PHONY: release
 release: $(RELEASE)
 
 $(RELEASE): $(OUT) $(README)
+	@echo packing release files [$^]...
 	$(ZIP) $@ $^
 
 $(OUT): $(MAIN).pdf
@@ -46,16 +46,16 @@ $(MAIN).idx: $(tex_files)
 	$(LATEX) $(MAIN).tex
 
 $(FIGURES_DIR)/%.eps: $(FIGURES_DIR)/%.mp
-	@echo making $@...
+	@echo making figure $@...
 	$(MPOST) $^
 	$(MV) $*.1 $@
 	$(RM) $(RM_FLAGS) $*.log
 
+.PHONY: count
 count:
-	find . -name '*.tex' -print | xargs wc -l
+	@echo counting lines of latex code:
+	@find . -name '*.tex' -print | xargs wc -l
 
+.PHONY: clean
 clean:
-	for file in $(tmp_files); do \
-		if [ -f $$file ]; then \
-			rm -rf $$file; \
-	fi; done;
+	$(RM) $(RM_FLAGS) $(tmp_files)
