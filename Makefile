@@ -1,7 +1,8 @@
 REVISION := 0.1
 DOCUMENT := make3_book
 OUT      := $(DOCUMENT)_r$(REVISION).pdf
-README   := README
+README   := README.md
+LICENSE  := LICENSE
 RELEASE  := $(DOCUMENT)_r$(REVISION).zip
 
 # TeX files
@@ -26,13 +27,14 @@ MPOST      := mpost
 MAKE_INDEX := makeindex
 RM_FLAGS   := -rf
 
+
 $(MAIN).pdf: $(tex_files) $(MAIN).ind $(figures)
 	$(LATEX) $(MAIN).tex
 
 .PHONY: release
 release: $(RELEASE)
 
-$(RELEASE): $(OUT) $(README)
+$(RELEASE): $(OUT) $(README) $(LICENSE)
 	@echo packing release files [$^]...
 	$(ZIP) $@ $^
 
@@ -50,6 +52,19 @@ $(FIGURES_DIR)/%.eps: $(FIGURES_DIR)/%.mp
 	$(MPOST) $^
 	$(MV) $*.1 $@
 	$(RM) $(RM_FLAGS) $*.log
+
+.PHONY: help
+help:
+	@echo ==================================================
+	@echo 'Managing Projects With GNU Make build help'
+	@echo ==================================================
+	@echo 'Target                   Purpose'
+	@echo --------------------------------------------------
+	@echo 'main.pdf (default)       Build pdf version of the book'
+	@echo 'help                     Show this help'
+	@echo 'release                  Build zip archive with pdf file'
+	@echo 'clean                    Remove all generated files'
+	@echo 'count                    Count LOC of the project'
 
 .PHONY: count
 count:

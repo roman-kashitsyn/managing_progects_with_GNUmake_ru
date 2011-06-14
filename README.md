@@ -12,7 +12,8 @@ Build
 =====
 At the moment the build is possible only on UNIX systems. To build the
 book you need to have latex and mpost. If you have Latex Live
-distributive installed, just execute `make' in project directory.
+distributive installed, just execute `make' in project directory. To
+get more help regarding project build execute `make help'.
 
 If you want to build the book on Windows very much, you can do it
 manually. Of course, you still have to install latex.
