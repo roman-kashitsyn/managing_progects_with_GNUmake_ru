@@ -1,6 +1,6 @@
 Managing projects with GNU Make
 ===============================
-It is a translation of the O'Reilly `Managing projects with GNU Make'
+It is a translation of the O'Reilly ``Managing projects with GNU Make``
 book (3 edition) to Russian.
 
 Original
@@ -12,13 +12,13 @@ Build
 =====
 At the moment the build is possible only on UNIX systems. To build the
 book you need to have latex and mpost. If you have Latex Live
-distributive installed, just execute `make' in project directory. To
-get more help regarding project build execute `make help'.
+distributive installed, just execute `make` in project directory. To
+get more help regarding project build execute `make help`.
 
 If you want to build the book on Windows very much, you can do it
 manually. Of course, you still have to install latex.
 All you need is to:
-1. process all the figures from `figures' directory with metapost
+1. process all the figures from ``figures`` directory with metapost
    processor (mpost);
 2. rename processed files from <name>.1 to <name>.eps;
 3. build main.tex file with pdflatex.
