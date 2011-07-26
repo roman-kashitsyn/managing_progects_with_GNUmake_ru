@@ -5,18 +5,18 @@
 
 Написание книги о программировании само по себе является интересным
 упражнением в построении систем сборки. Текст книги состоит из
-можества файлов, каждый из которых требует различной
+множества файлов, каждый из которых требует различной
 обработки. Примеры являются реальными программами, каждая из которых
 должна быть запущена, а их вывод нуждается в сборе, обработке и
-включении в основной текст (поэтому вывод не нужно копировать и
-вставлять в текст, что избавляет от риска внесения ошибок). В процессе
-написания полезно иметь возможность просмотреть текст в различных
-форматах. Наконец. Наконец, доставка материала требует
+включении в основной текст (благодаря этому вывод не нужно копировать
+и вставлять в текст, что избавляет от риска внесения ошибок). В
+процессе написания полезно иметь возможность просмотреть текст в
+различных форматах. Наконец, доставка материала требует
 архивирования. Разумеется, все шаги должны быть воспроизводимыми и
 относительно простыми в поддержке.
 
 Выглядит как работа для \GNUmake{}! Возможность применения для
-поразительно разнородных потребностей ~--- одна из самых замечательных
+удивительно разнородных потребностей ~--- одна из самых замечательных
 особенностей \GNUmake{}. Эта книга была написана в формате DocBook
 (т.е. XML). \GNUmake{} ~--- стандартный инструмент при работе с
 \TeX{}, \LaTeX{} и \command{troff}.
@@ -25,11 +25,11 @@
 строк. \Makefile{} разделяется на следующие базовые задачи:
 
 \begin{itemize}
-  \item{} Управление примерами
-  \item{} Обработка XML
-  \item{} Генерация документов различных форматов
-  \item{} Проверка исходного кода
-  \item{} Базовые задачи поддержки
+  \item{} Управление примерами.
+  \item{} Обработка XML.
+  \item{} Генерация документов различных форматов.
+  \item{} Проверка исходного кода.
+  \item{} Базовые задачи поддержки.
 \end{itemize}
 
 \footnotesize{
@@ -43,9 +43,9 @@
 # print     Печать pdf
 # show_html Генерация html и запуск программы просмотра
 # html      Генерация html
-# xml       Генеарация xml
-# release   Создать архив релиза
-# clean     Удалить файлы, созданные в процессе сборки
+# xml       Генерация xml
+# release   Создание архива релиза
+# clean     Удаление файлов, созданных в процессе сборки
 #
 
 BOOK_DIR     := /test/book
@@ -78,8 +78,8 @@ make-depend := bin/make-depend
 m4-macros := text/macros.m4
 
 # $(call process-includes, input-file, output-file)
-# Осуществляет удаление отступов, подстановку макросов и
-# обработку директив включения
+# Осуществляет удаление символов табуляции, подстановку
+# макросов и обработку директив включения.
 define process-includes
   expand $1 |                                             \
   $(M4) --prefix-builtins --include=text $(m4-macros) - | \
@@ -167,7 +167,8 @@ BOOK_FO_OUT      := $(subst xml,fo,$(BOOK_XML_OUT))
 BOOK_PDF_OUT     := $(subst xml,pdf,$(BOOK_XML_OUT))
 ALL_XML_SRC      := $(wildcard $(SOURCE_DIR)/*.xml)
 ALL_XML_OUT      := $(call source-to-output,$(ALL_XML_SRC))
-DEPENDENCY_FILES := $(call source-to-output,$(subst .xml,.d,$(ALL_XML_SRC)))
+DEPENDENCY_FILES := $(call source-to-output,\
+                           $(subst .xml,.d,$(ALL_XML_SRC)))
 # xml/html/pdf - Производит желаемые конечный формат книги.
 .PHONY: xml html pdf
 xml:  $(OUTPUT_DIR)/validate
@@ -207,7 +208,7 @@ $(BOOK_XML_OUT): Makefile
 #
 FOP := org.apache.fop.apps.Fop
 
-# DEBUG_FOP - Определите этот макрос для просмотра вывода fop
+# DEBUG_FOP - Определите этот макрос для просмотра вывода fop.
 ifndef DEBUG_FOP
   FOP_FLAGS := -q
   FOP_OUTPUT := | $(SED) -e '/not implemented/d'       \
@@ -228,22 +229,22 @@ CLASSPATH = $(patsubst %;,%,                                \
                     jimi-1.0                                \
                     avalon-framework-cvs-20020315))))
 
-# %.pdf - Шаблонное правило создания pdf из fo
+# %.pdf - Шаблонное правило создания pdf из fo.
 %.pdf: %.fo
     $(kill-acroread)
     java -Xmx128M $(FOP) $(FOP_FLAGS) $< $@ $(FOP_OUTPUT)
 
-# %.fo - Шаблонное правило для создания fo из xml
+# %.fo - Шаблонное правило для создания fo из xml.
 PAPER_SIZE := letter
 %.fo: %.xml
     XSLT_FLAGS="--stringparam paper.type $(PAPER_SIZE)" \
     $(XMLTO) $(XMLTO_FLAGS) fo $<
 
-# %.html - Шаблонное правило для создания html из xml
+# %.html - Шаблонное правило для создания html из xml.
 %.html: %.xml
     $(XMLTO) $(XMLTO_FLAGS) html-nochunks $<
 
-# fop_help - Отображение спавки по использованию fop
+# fop_help - Отображение спавки по использованию fop.
 .PHONY: fop_help
 fop_help:
     -java org.apache.fop.apps.Fop -help
@@ -313,7 +314,7 @@ EXAMPLES :=
     appb-defstruct
     appb-arithmetic
 
-# Я бы с радостью использовал это цикл foreach, но ошибка
+# Я бы с радостью использовал этот цикл foreach, но ошибка
 # в версии 3.80 приводит к аварийному останову.
 #$(foreach e,$(EXAMPLES),$(eval $(call generic-program-example,$e)))
 
@@ -428,7 +429,6 @@ $(ALL_EXAMPLES):
 #################################################################
 # clean
 #
-
 clean:
     $(kill-acroread)
     $(RM) -r $(OUTPUT_DIR)
@@ -468,6 +468,7 @@ $(OUTPUT_DIR)/%.d: %.xml $(make-depend)
 #
 DOCBOOK_IMAGES := $(OUTPUT_DIR)/release/images
 DRAFT_PNG      := /usr/share/docbook-xsl/images/draft.png
+
 ifneq "$(MAKECMDGOALS)" "clean"
   _CREATE_OUTPUT_DIR :=                                                 \
     $(shell                                                             \
