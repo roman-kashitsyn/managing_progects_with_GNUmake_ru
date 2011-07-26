@@ -1,0 +1,517 @@
+%%--------------------------------------------------------------------
+%% The Book Makefile
+%%--------------------------------------------------------------------
+\section{\Makefile{} этой книги}
+
+Написание книги о программировании само по себе является интересным
+упражнением в построении систем сборки. Текст книги состоит из
+можества файлов, каждый из которых требует различной
+обработки. Примеры являются реальными программами, каждая из которых
+должна быть запущена, а их вывод нуждается в сборе, обработке и
+включении в основной текст (поэтому вывод не нужно копировать и
+вставлять в текст, что избавляет от риска внесения ошибок). В процессе
+написания полезно иметь возможность просмотреть текст в различных
+форматах. Наконец. Наконец, доставка материала требует
+архивирования. Разумеется, все шаги должны быть воспроизводимыми и
+относительно простыми в поддержке.
+
+Выглядит как работа для \GNUmake{}! Возможность применения для
+поразительно разнородных потребностей ~--- одна из самых замечательных
+особенностей \GNUmake{}. Эта книга была написана в формате DocBook
+(т.е. XML). \GNUmake{} ~--- стандартный инструмент при работе с
+\TeX{}, \LaTeX{} и \command{troff}.
+
+Следующий пример содержит полный \Makefile{} книги. В нём примерно 440
+строк. \Makefile{} разделяется на следующие базовые задачи:
+
+\begin{itemize}
+  \item{} Управление примерами
+  \item{} Обработка XML
+  \item{} Генерация документов различных форматов
+  \item{} Проверка исходного кода
+  \item{} Базовые задачи поддержки
+\end{itemize}
+
+\footnotesize{
+\begin{verbatim}
+# Сборка книги.
+#
+# Основные цели этого файла:
+#
+# show_pdf  Генерация pdf и запуск программы просмотра
+# pdf       Генерация pdf
+# print     Печать pdf
+# show_html Генерация html и запуск программы просмотра
+# html      Генерация html
+# xml       Генеарация xml
+# release   Создать архив релиза
+# clean     Удалить файлы, созданные в процессе сборки
+#
+
+BOOK_DIR     := /test/book
+SOURCE_DIR   := text
+OUTPUT_DIR   := out
+EXAMPLES_DIR := examples
+
+QUIET = @
+
+SHELL       =  shell
+AWK         := awk
+CP          := cp
+EGREP       := egrep
+HTML_VIEWER := cygstart
+KILL        := /bin/kill
+M4          := m4
+MV          := mv
+PDF_VIEWER  := cygstart
+RM          := rm -f
+MKDIR       := mkdir -p
+LNDIR       := lndir
+SED         := sed
+SORT        := sort
+TOUCH       := touch
+XMLTO       := xmlto
+XMLTO_FLAGS =  -o $(OUTPUT_DIR) $(XML_VERBOSE)
+process-pgm := bin/process-include
+make-depend := bin/make-depend
+
+m4-macros := text/macros.m4
+
+# $(call process-includes, input-file, output-file)
+# Осуществляет удаление отступов, подстановку макросов и
+# обработку директив включения
+define process-includes
+  expand $1 |                                             \
+  $(M4) --prefix-builtins --include=text $(m4-macros) - | \
+  $(process-pgm) > $2
+endef
+
+# $(call file-exists, file-name)
+# Возвращает ненулевое значение в случае существования
+# файла с заданным именем
+file-exists = $(wildcard $1)
+
+# $(call maybe-mkdir, directory-name-opt)
+# Создаёт каталог, если он ещё не существует.
+# Если параметр directory-name-opt опущен, в качестве имени
+# каталога используется значение $@.
+maybe-mkdir = $(if $(call file-exists,        \
+                     $(if $1,$1,$(dir $@))),, \
+                $(MKDIR) $(if $1,$1,$(dir $@)))
+
+# $(kill-acroread)
+# Завершает процесс Acrobat Reader
+define kill-acroread
+  $(QUIET) ps -W |                                 \
+  $(AWK) 'BEGIN { FIELDWIDTHS = "9 47 100" }       \
+          /AcroRd32/ {                             \
+                       print "Killing " $$3;       \
+                       system( "$(KILL) -f " $$1 ) \
+                     }'
+endef
+
+# $(call source-to-output, file-name)
+# Преобразует имя исходного файла в имя выходного файла.
+define source-to-output
+$(subst $(SOURCE_DIR),$(OUTPUT_DIR),$1)
+endef
+
+# $(call run-script-example, script-name, output-file)
+# Запускает makefile примера.
+define run-script-example
+  ( cd $(dir $1);                                   \
+    $(notdir $1) 2>&1 |                             \
+    if $(EGREP) --silent '\$$\(MAKE\)' [mM]akefile; \
+    then                                            \
+      $(SED) -e 's/^++*/$$/';                       \
+    else                                            \
+      $(SED) -e 's/^++*/$$/'                        \
+             -e '/ing directory /d'                 \
+             -e 's/\[[0-9]\]//';                    \
+    fi )                                            \
+  > $(TMP)/out.$$$$ &                               \
+  $(MV) $(TMP)/out.$$$$ $2
+endef
+
+# $(call generic-program-example,example-directory)
+# Создаёт общие правила сборки примера
+define generic-program-example
+  $(eval $1_dir      := $(OUTPUT_DIR)/$1)
+  $(eval $1_make_out := $($1_dir)/make.out)
+  $(eval $1_run_out  := $($1_dir)/run.out)
+  $(eval $1_clean    := $($1_dir)/clean)
+  $(eval $1_run_make := $($1_dir)/run-make)
+  $(eval $1_run_run  := $($1_dir)/run-run)
+  $(eval $1_sources  := $(filter-out %/CVS, \
+                          $(wildcard $(EXAMPLES_DIR)/$1/*)))
+  $($1_run_out): $($1_make_out) $($1_run_run)
+      $$(call run-script-example, $($1_run_run), $$@)
+
+  $($1_make_out): $($1_clean) $($1_run_make)
+      $$(call run-script-example, $($1_run_make), $$@)
+
+  $($1_clean): $($1_sources) Makefile
+      $(RM) -r $($1_dir)
+      $(MKDIR) $($1_dir)
+      $(LNDIR) -silent ../../$(EXAMPLES_DIR)/$1 $($1_dir)
+      $(TOUCH) $$@
+
+  $($1_run_make):
+      printf "#! /bin/bash -x\nmake\n" > $$@
+endef
+
+# Конечные форматы книги
+BOOK_XML_OUT     := $(OUTPUT_DIR)/book.xml
+BOOK_HTML_OUT    := $(subst xml,html,$(BOOK_XML_OUT))
+BOOK_FO_OUT      := $(subst xml,fo,$(BOOK_XML_OUT))
+BOOK_PDF_OUT     := $(subst xml,pdf,$(BOOK_XML_OUT))
+ALL_XML_SRC      := $(wildcard $(SOURCE_DIR)/*.xml)
+ALL_XML_OUT      := $(call source-to-output,$(ALL_XML_SRC))
+DEPENDENCY_FILES := $(call source-to-output,$(subst .xml,.d,$(ALL_XML_SRC)))
+# xml/html/pdf - Производит желаемые конечный формат книги.
+.PHONY: xml html pdf
+xml:  $(OUTPUT_DIR)/validate
+html: $(BOOK_HTML_OUT)
+pdf:  $(BOOK_PDF_OUT)
+
+# show_pdf - Создаёт pdf документ и отображает его.
+.PHONY: show_pdf show_html print
+show_pdf: $(BOOK_PDF_OUT)
+    $(kill-acroread)
+    $(PDF_VIEWER) $(BOOK_PDF_OUT)
+
+# show_html - Создаёт html файл и отображает его.
+show_html: $(BOOK_HTML_OUT)
+    $(HTML_VIEWER) $(BOOK_HTML_OUT)
+
+# print - Печатает заданные страницы книги.
+print: $(BOOK_FO_OUT)
+    $(kill-acroread)
+    java -Dstart=15 -Dend=15 $(FOP) $< -print > /dev/null
+
+# $(BOOK_PDF_OUT) - Создаёт pdf файл.
+$(BOOK_PDF_OUT): $(BOOK_FO_OUT) Makefile
+
+# $(BOOK_HTML_OUT) - Создаёт html файл.
+$(BOOK_HTML_OUT): $(ALL_XML_OUT) $(OUTPUT_DIR)/validate Makefile
+
+# $(BOOK_FO_OUT) - Создаёт временный файл в формате fo.
+.INTERMEDIATE: $(BOOK_FO_OUT)
+    $(BOOK_FO_OUT): $(ALL_XML_OUT) $(OUTPUT_DIR)/validate Makefile
+
+# $(BOOK_XML_OUT) - Обрабатывает все входные xml файлы.
+$(BOOK_XML_OUT): Makefile
+
+#################################################################
+# Поддержка FOP
+#
+FOP := org.apache.fop.apps.Fop
+
+# DEBUG_FOP - Определите этот макрос для просмотра вывода fop
+ifndef DEBUG_FOP
+  FOP_FLAGS := -q
+  FOP_OUTPUT := | $(SED) -e '/not implemented/d'       \
+                         -e '/relative-align/d'        \
+                         -e '/xsl-footnote-separator/d'
+endif
+
+# CLASSPATH - Compute the appropriate CLASSPATH for fop.
+export CLASSPATH
+CLASSPATH = $(patsubst %;,%,                                \
+              $(subst ; ,;,                                 \
+                 $(addprefix c:/usr/xslt-process-2.2/java/, \
+                  $(addsuffix .jar;,                        \
+                    xalan                                   \
+                    xercesImpl                              \
+                    batik                                   \
+                    fop                                     \
+                    jimi-1.0                                \
+                    avalon-framework-cvs-20020315))))
+
+# %.pdf - Шаблонное правило создания pdf из fo
+%.pdf: %.fo
+    $(kill-acroread)
+    java -Xmx128M $(FOP) $(FOP_FLAGS) $< $@ $(FOP_OUTPUT)
+
+# %.fo - Шаблонное правило для создания fo из xml
+PAPER_SIZE := letter
+%.fo: %.xml
+    XSLT_FLAGS="--stringparam paper.type $(PAPER_SIZE)" \
+    $(XMLTO) $(XMLTO_FLAGS) fo $<
+
+# %.html - Шаблонное правило для создания html из xml
+%.html: %.xml
+    $(XMLTO) $(XMLTO_FLAGS) html-nochunks $<
+
+# fop_help - Отображение спавки по использованию fop
+.PHONY: fop_help
+fop_help:
+    -java org.apache.fop.apps.Fop -help
+    -java org.apache.fop.apps.Fop -print help
+
+#################################################################
+# release - Создаёт релиз книги
+#
+RELEASE_TAR   := mpwm-$(shell date +%F).tar.gz
+RELEASE_FILES := README Makefile *.pdf bin examples out text
+.PHONY: release
+release: $(BOOK_PDF_OUT)
+    ln -sf $(BOOK_PDF_OUT) .
+    tar --create                 \
+        --gzip                   \
+        --file=$(RELEASE_TAR)    \
+        --exclude=CVS            \
+        --exclude=semantic.cache \
+        --exclude=*~             \
+        $(RELEASE_FILES)
+    ls -l $(RELEASE_TAR)
+
+#################################################################
+# Правила для примеров из первой главы.
+#
+# Все каталоги с примерами.
+EXAMPLES :=
+    ch01-bogus-tab
+    ch01-cw1
+    ch01-hello
+    ch01-cw2
+    ch01-cw2a
+    ch02-cw3
+    ch02-cw4
+    ch02-cw4a
+    ch02-cw5
+    ch02-cw5a
+    ch02-cw5b
+    ch02-cw6
+    ch02-make-clean
+    ch03-assert-not-null
+    ch03-debug-trace
+    ch03-debug-trace-1
+    ch03-debug-trace-2
+    ch03-filter-failure
+    ch03-find-program-1
+    ch03-find-program-2
+    ch03-findstring-1
+    ch03-grep
+    ch03-include
+    ch03-invalid-variable
+    ch03-kill-acroread
+    ch03-kill-program
+    ch03-letters
+    ch03-program-variables-1
+    ch03-program-variables-2
+    ch03-program-variables-3
+    ch03-program-variables-5
+    ch03-scoping-issue
+    ch03-shell
+    ch03-trailing-space
+    ch04-extent
+    ch04-for-loop-1
+    ch04-for-loop-2
+    ch04-for-loop-3
+    ch06-simple
+    appb-defstruct
+    appb-arithmetic
+
+# Я бы с радостью использовал это цикл foreach, но ошибка
+# в версии 3.80 приводит к аварийному останову.
+#$(foreach e,$(EXAMPLES),$(eval $(call generic-program-example,$e)))
+
+# Вместо этого приходитя раскрывать цикл вручную:
+$(eval $(call generic-program-example,ch01-bogus-tab))
+$(eval $(call generic-program-example,ch01-cw1))
+$(eval $(call generic-program-example,ch01-hello))
+$(eval $(call generic-program-example,ch01-cw2))
+$(eval $(call generic-program-example,ch01-cw2a))
+$(eval $(call generic-program-example,ch02-cw3))
+$(eval $(call generic-program-example,ch02-cw4))
+$(eval $(call generic-program-example,ch02-cw4a))
+$(eval $(call generic-program-example,ch02-cw5))
+$(eval $(call generic-program-example,ch02-cw5a))
+$(eval $(call generic-program-example,ch02-cw5b))
+$(eval $(call generic-program-example,ch02-cw6))
+$(eval $(call generic-program-example,ch02-make-clean))
+$(eval $(call generic-program-example,ch03-assert-not-null))
+$(eval $(call generic-program-example,ch03-debug-trace))
+$(eval $(call generic-program-example,ch03-debug-trace-1))
+$(eval $(call generic-program-example,ch03-debug-trace-2))
+$(eval $(call generic-program-example,ch03-filter-failure))
+$(eval $(call generic-program-example,ch03-find-program-1))
+$(eval $(call generic-program-example,ch03-find-program-2))
+$(eval $(call generic-program-example,ch03-findstring-1))
+$(eval $(call generic-program-example,ch03-grep))
+$(eval $(call generic-program-example,ch03-include))
+$(eval $(call generic-program-example,ch03-invalid-variable))
+$(eval $(call generic-program-example,ch03-kill-acroread))
+$(eval $(call generic-program-example,ch03-kill-program))
+$(eval $(call generic-program-example,ch03-letters))
+$(eval $(call generic-program-example,ch03-program-variables-1))
+$(eval $(call generic-program-example,ch03-program-variables-2))
+$(eval $(call generic-program-example,ch03-program-variables-3))
+$(eval $(call generic-program-example,ch03-program-variables-5))
+$(eval $(call generic-program-example,ch03-scoping-issue))
+$(eval $(call generic-program-example,ch03-shell))
+$(eval $(call generic-program-example,ch03-trailing-space))
+$(eval $(call generic-program-example,ch04-extent))
+$(eval $(call generic-program-example,ch04-for-loop-1))
+$(eval $(call generic-program-example,ch04-for-loop-2))
+$(eval $(call generic-program-example,ch04-for-loop-3))
+$(eval $(call generic-program-example,ch06-simple))
+$(eval $(call generic-program-example,ch10-echo-bash))
+$(eval $(call generic-program-example,appb-defstruct))
+$(eval $(call generic-program-example,appb-arithmetic))
+
+#################################################################
+# validate
+#
+# Производит проверку
+# a) неподставленных макросов m4;
+# b) символов табуляций;
+# c) комментариев FIXME;
+# d) RM: мои ответы Andy;
+# e) дубликатов макросов m4.
+#
+validation_checks := $(OUTPUT_DIR)/chk_macros_tabs      \
+                     $(OUTPUT_DIR)/chk_fixme            \
+                     $(OUTPUT_DIR)/chk_duplicate_macros \
+                     $(OUTPUT_DIR)/chk_orphaned_examples
+
+.PHONY: validate-only
+validate-only: $(OUTPUT_DIR)/validate
+$(OUTPUT_DIR)/validate: $(validation_checks)
+    $(TOUCH) $@
+
+$(OUTPUT_DIR)/chk_macros_tabs: $(ALL_XML_OUT)
+    # Ищем макросы и символы табуляции...
+    $(QUIET)! $(EGREP) --ignore-case          \
+                       --line-number          \
+                       --regexp='\b(m4_|mp_)' \
+                       --regexp='\011'
+                       $^
+    $(TOUCH) $@
+
+$(OUTPUT_DIR)/chk_fixme: $(ALL_XML_OUT)
+    # Ищем комментарии RM: и FIXME...
+    $(QUIET)$(AWK)                                                \
+            '/FIXME/ { printf "%s:%s: %s\n", FILENAME, NR, $$0 }  \
+             /^ *RM:/ {                                           \
+                        if ( $$0 !~ /RM: Done/ )                  \
+                        printf "%s:%s: %s\n", FILENAME, NR, $$0   \
+                      }' $(subst $(OUTPUT_DIR)/,$(SOURCE_DIR)/,$^) 
+    $(TOUCH) $@ 
+
+$(OUTPUT_DIR)/chk_duplicate_macros: $(SOURCE_DIR)/macros.m4
+    # Ищем дубликаты макросов...
+    $(QUIET)! $(EGREP) --only-matching              \
+        "\`[^']+'," $< |                            \
+    $(SORT) |                                       \
+    uniq -c |                                       \
+    $(AWK) '$$1 > 1 { printf "$<:0: %s\n", $$0 }' | \
+    $(EGREP) "^"
+    $(TOUCH) $@
+
+ALL_EXAMPLES := $(TMP)/all_examples
+
+$(OUTPUT_DIR)/chk_orphaned_examples: $(ALL_EXAMPLES) $(DEPENDENCY_FILES)
+    $(QUIET)$(AWK) -F/ '/(EXAMPLES|OUTPUT)_DIR/ { print $$3 }' \
+            $(filter %.d,$^) |                                 \
+    $(SORT) -u |                                               \
+    comm -13 - $(filter-out %.d,$^)
+    $(TOUCH) $@
+
+.INTERMEDIATE: $(ALL_EXAMPLES)
+$(ALL_EXAMPLES):
+    # Ищем неиспользованные примеры...
+    $(QUIET) ls -p $(EXAMPLES_DIR) | \
+    $(AWK) '/CVS/ { next }           \
+            /\// { print substr($$0, 1, length - 1) }' > $@
+#################################################################
+# clean
+#
+
+clean:
+    $(kill-acroread)
+    $(RM) -r $(OUTPUT_DIR)
+    $(RM) $(SOURCE_DIR)/*~ $(SOURCE_DIR)/*.log semantic.cache
+    $(RM) book.pdf
+
+#################################################################
+# Управление зависимостями
+#
+# Если выполняется цель clean, не стоит производить чтение или
+# запуск включаемых файлов.
+#
+ifneq "$(MAKECMDGOALS)" "clean"
+  -include $(DEPENDENCY_FILES)
+endif
+
+vpath %.xml $(SOURCE_DIR)
+vpath %.tif $(SOURCE_DIR)
+vpath %.eps $(SOURCE_DIR)
+
+$(OUTPUT_DIR)/%.xml: %.xml $(process-pgm) $(m4-macros)
+    $(call process-includes, $<, $@)
+
+$(OUTPUT_DIR)/%.tif: %.tif
+    $(CP) $< $@
+
+$(OUTPUT_DIR)/%.eps: %.eps
+    $(CP) $< $@
+
+$(OUTPUT_DIR)/%.d: %.xml $(make-depend)
+    $(make-depend) $< > $@
+
+#################################################################
+# Создание каталогов для вывода
+#
+# Создаём каталоги для вывода по мере необходимости.
+#
+DOCBOOK_IMAGES := $(OUTPUT_DIR)/release/images
+DRAFT_PNG      := /usr/share/docbook-xsl/images/draft.png
+ifneq "$(MAKECMDGOALS)" "clean"
+  _CREATE_OUTPUT_DIR :=                                                 \
+    $(shell                                                             \
+      $(MKDIR) $(DOCBOOK_IMAGES) &                                      \
+      $(CP) $(DRAFT_PNG) $(DOCBOOK_IMAGES);                             \
+      if ! [[ $(foreach d,                                              \
+                $(notdir                                                \
+                  $(wildcard $(EXAMPLES_DIR)/ch*)),                     \
+                -e $(OUTPUT_DIR)/$d &) -e . ]];                         \
+      then                                                              \
+        echo Компоновка примеров... > /dev/stderr;                      \
+        $(LNDIR) $(BOOK_DIR)/$(EXAMPLES_DIR) $(BOOK_DIR)/$(OUTPUT_DIR); \
+      fi)
+endif
+\end{verbatim}
+}
+
+Этот \Makefile{} написан для запуска в Cygwin без серьёзных претензий
+на переносимость в \UNIX{}. Тем не менее, я уверен, что в нём очень
+мало (если вообще есть) несовместимостей с \UNIX{}, которые нельзя
+было бы решить переопределением значений переменных или, возможно,
+введением новых переменных.
+
+Раздел глобальных переменных определяет расположение корневого
+каталога и относительные пути к каталогам с текстом и примерами, а
+также к каталогу для вывода. Имя каждой нетривиальной программы,
+используемой в \makefile{е}, оформляется в виде переменной.
+
+%---------------------------------------------------------------------
+% Managing Examples
+%---------------------------------------------------------------------
+\subsection{Управление примерами}
+
+%---------------------------------------------------------------------
+% XML Processing
+%---------------------------------------------------------------------
+\subsection{Обработка XML}
+
+%---------------------------------------------------------------------
+% Generating Output
+%---------------------------------------------------------------------
+\subsection{Генерация документов}
+
+%---------------------------------------------------------------------
+% Validating the Source
+%---------------------------------------------------------------------
+\subsection{Проверка исходного кода}
