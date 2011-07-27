@@ -7,4 +7,5 @@
 *.pdf
 *.toc
 *.eps
+*.pyc
 *.1
