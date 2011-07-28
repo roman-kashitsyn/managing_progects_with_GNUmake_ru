@@ -7,9 +7,11 @@ RELEASE  := $(DOCUMENT)_r$(REVISION).zip
 
 # TeX files
 MAIN        := main
-FIGURES_DIR := figures
-figures     := $(addsuffix .eps,$(basename $(wildcard $(FIGURES_DIR)/*.mp)))
-tex_files   := $(shell find . -name '*.tex' -type f -print)
+latex_src   := ./src/latex
+figures_dir := $(latex_src)/figures
+main_tex    := $(latex_src)/$(MAIN).tex
+figures     := $(addsuffix .eps,$(basename $(wildcard $(figures_dir)/*.mp)))
+tex_files   := $(shell find $(latex_src) -name '*.tex' -type f -print)
 
 # temporary files
 tmp_suffixes := aux toc log ilg ind idx pdf dvi out
@@ -28,8 +30,8 @@ MAKE_INDEX := makeindex
 RM_FLAGS   := -rf
 
 
-$(MAIN).pdf: $(tex_files) $(MAIN).ind $(figures)
-	$(LATEX) $(MAIN).tex
+$(MAIN).pdf: $(tex_files) $(MAIN).ind
+	$(LATEX) $(main_tex)
 
 .PHONY: release
 release: $(RELEASE)
@@ -44,10 +46,10 @@ $(OUT): $(MAIN).pdf
 $(MAIN).ind: $(MAIN).idx
 	$(MAKE_INDEX) $(MAIN).idx
 
-$(MAIN).idx: $(tex_files)
-	$(LATEX) $(MAIN).tex
+$(MAIN).idx: $(tex_files) $(figures)
+	$(LATEX) $(main_tex)
 
-$(FIGURES_DIR)/%.eps: $(FIGURES_DIR)/%.mp
+$(figures_dir)/%.eps: $(figures_dir)/%.mp
 	@echo making figure $@...
 	$(MPOST) $^
 	$(MV) $*.1 $@
