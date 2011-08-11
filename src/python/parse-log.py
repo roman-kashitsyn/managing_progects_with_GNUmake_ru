@@ -29,27 +29,19 @@ def printOverfulls(overfulls):
             prev_file = current_file
         print '{0:>5}: {1}'.format(overfull['linum'], overfull['line'])
 
+def usage(my_name):
+    print >> sys.stderr, "{0} log_file".format(my_name)
+    sys.exit(1)
+
 if __name__ == "__main__":
-    make_with_args = ['make']
+    if len(sys.argv) < 2:
+        sys.exit(1);
 
-    if len(sys.argv) > 1:
-        make_with_args.extend(sys.argv[1:])
-        logging.info("Running make with arguments: {0}", sys.argv[1:])
-    else:
-        logging.info("Running make without parameters")
+    log_file = open(sys.argv[-1])
 
-    p = Popen(make_with_args, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
-
-    stdoutdata, stderrdata = p.communicate()
-
-    if stderrdata != None:
-        logging.warning("Make produce error messages:")
-        print stderrdata
-
-    if make_with_args.count('clean') > 0:
-        exit()
-
-    logdata = texlog.parse(stdoutdata)
+    logdata = texlog.parse(log_file.read())
+    
+    log_file.close()
 
     if len(logdata.overfulls) > 0:
         print warning('Overfulls:')

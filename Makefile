@@ -25,13 +25,23 @@ LN         := ln
 MV         := mv
 RM         := rm
 LATEX      := pdflatex
+SHELL      := bash
 MPOST      := mpost
 MAKE_INDEX := makeindex
 RM_FLAGS   := -rf
+PYTHON     := python
+
+# miscellaneous
+SILENCE    := &>/dev/null
+
+define parse-log
+  $(PYTHON) ./src/python/parse-log.py
+endef
 
 
 $(MAIN).pdf: $(tex_files) $(MAIN).ind
-	$(LATEX) $(main_tex)
+	$(LATEX) $(main_tex) $(SILENCE)
+	$(parse-log) $(MAIN).log
 
 .PHONY: release
 release: $(RELEASE)
@@ -44,10 +54,10 @@ $(OUT): $(MAIN).pdf
 	$(LN) $< $@
 
 $(MAIN).ind: $(MAIN).idx
-	$(MAKE_INDEX) $(MAIN).idx
+	$(MAKE_INDEX) $< $(SILENCE)
 
 $(MAIN).idx: $(tex_files) $(figures)
-	$(LATEX) $(main_tex)
+	$(LATEX) $(main_tex) $(SILENCE)
 
 $(figures_dir)/%.eps: $(figures_dir)/%.mp
 	@echo making figure $@...
