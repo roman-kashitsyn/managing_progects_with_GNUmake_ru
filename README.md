@@ -15,10 +15,6 @@ book you need to have latex and mpost. If you have Latex Live
 distributive installed, just execute `make` in project directory. To
 get more help regarding project build execute `make help`.
 
-I have also wrote a little script in python to run make and parse
-latex output and show found issues in pretty format. To run it just
-execute `./run-make.sh <target>` in project directory.
-
 If you want to build the book on Windows very much, you can do it
 manually. Of course, you still have to install latex. All you need is
 to:
