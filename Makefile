@@ -5,6 +5,8 @@ README   := README.md
 LICENSE  := LICENSE
 RELEASE  := $(DOCUMENT)_r$(REVISION).zip
 
+ORIGIN_DIR := origin
+
 # TeX files
 MAIN        := main
 latex_src   := ./src/latex
@@ -24,24 +26,47 @@ ZIP        := zip
 LN         := ln
 MV         := mv
 RM         := rm
+MKDIR      := mkdir
 LATEX      := pdflatex
 SHELL      := bash
 MPOST      := mpost
 MAKE_INDEX := makeindex
 RM_FLAGS   := -rf
 PYTHON     := python
+WGET       := wget
 
 # miscellaneous
 SILENCE    := &>/dev/null
 
 define parse-log
-  $(PYTHON) ./src/python/parse-log.py
+  $(PYTHON) ./src/python/parse-log.py $1
 endef
 
+define insure-dir-exists
+  if [ ! -d $1 ]; then $(MKDIR) $1; fi
+endef
+
+define insure-prog-exists
+  echo -n "Checking for $1... "; \
+  if which $1 &> /dev/null;      \
+    then echo "Ok. :]";          \
+    else echo "NOT FOUND.";      \
+         echo "Exiting. :[";     \
+         exit 1;                 \
+  fi
+endef
+
+define download-file-to-dir
+  $(WGET) --directory-prefix $2 $1;
+endef
+
+define original-chapter
+  http://oreilly.com/catalog/make3/book/ch$(1).pdf
+endef
 
 $(MAIN).pdf: $(tex_files) $(MAIN).ind
 	$(LATEX) $(main_tex) $(SILENCE)
-	$(parse-log) $(MAIN).log
+	$(call parse-log,$(MAIN).log)
 
 .PHONY: release
 release: $(RELEASE)
@@ -77,12 +102,23 @@ help:
 	@echo 'release                  Build zip archive with pdf file'
 	@echo 'clean                    Remove all generated files'
 	@echo 'count                    Count LOC of the project'
+	@echo 'download-origin          Download original of the book'
+	@echo '                         Requires wget and ~4.5M disk space'
 
 .PHONY: count
 count:
 	@echo counting lines of latex code:
 	@find . -name '*.tex' -print | xargs wc -l
 
+.PHONY: download-origin
+download-origin:
+	$(call insure-prog-exists,$(WGET))
+	$(call insure-dir-exists,$(ORIGIN_DIR))
+	for ch in {01..12}; do                                           \
+	  $(call download-file-to-dir,$(call original-chapter,"$${ch}"), \
+                                      $(ORIGIN_DIR))                     \
+	done;
+
 .PHONY: clean
 clean:
-	$(RM) $(RM_FLAGS) $(tmp_files)
+	$(RM) $(RM_FLAGS) $(tmp_files) $(ORIGIN_DIR)

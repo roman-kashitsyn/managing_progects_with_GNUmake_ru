@@ -1,12 +1,19 @@
 Managing projects with GNU Make
 ===============================
+
 It is a translation of the O'Reilly *Managing projects with GNU Make*
 book (3 edition) to Russian.
 
 Original
 ========
-You can find original of the book at [O'Reilly web
-site](http://oreilly.com/catalog/make3/book/index.csp).
+
+You can find original of the book at
+[O'Reilly web site](http://oreilly.com/catalog/make3/book/index.csp). It
+is also possible to download the original using progect `Makefile`:
+just execute the following command (requires `wget` and ~4.5M
+of free space):
+
+    make download-origin
 
 Build
 =====
@@ -30,11 +37,13 @@ Alternatively, you can write some kind of Makefile for Windows.
 
 License
 =======
+
 This work is distributed under GNU FDL 1.3. A copy of this license
 located in the LICENSE file. You can find additional info about this
 license on [GNU official web site](http://www.gnu.org).
 
 Contacts
 ========
+
 If you have questions or want to contribute please contact me:
-Roman Kashitsyn<roman.kashitsyn@gmail.com>
+[Roman Kashitsyn](mailto:roman.kashitsyn@gmail.com)
