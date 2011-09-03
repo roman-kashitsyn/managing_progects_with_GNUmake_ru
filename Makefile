@@ -36,6 +36,7 @@ PYTHON     := python
 WGET       := wget
 
 # miscellaneous
+LATEX_ARGS := --interaction batchmode
 SILENCE    := &>/dev/null
 
 define parse-log
@@ -65,7 +66,7 @@ define original-chapter
 endef
 
 $(MAIN).pdf: $(tex_files) $(MAIN).ind
-	$(LATEX) $(main_tex) $(SILENCE)
+	$(LATEX) $(LATEX_ARGS) $(main_tex) $(SILENCE)
 	$(call parse-log,$(MAIN).log)
 
 .PHONY: release
@@ -82,7 +83,7 @@ $(MAIN).ind: $(MAIN).idx
 	$(MAKE_INDEX) $< $(SILENCE)
 
 $(MAIN).idx: $(tex_files) $(figures)
-	$(LATEX) $(main_tex) $(SILENCE)
+	$(LATEX) $(LATEX_ARGS) $(main_tex) $(SILENCE)
 
 $(figures_dir)/%.eps: $(figures_dir)/%.mp
 	@echo making figure $@...
@@ -121,4 +122,4 @@ download-origin:
 
 .PHONY: clean
 clean:
-	$(RM) $(RM_FLAGS) $(tmp_files) $(ORIGIN_DIR)
+	$(RM) $(RM_FLAGS) $(tmp_files)

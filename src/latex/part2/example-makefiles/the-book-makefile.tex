@@ -32,7 +32,6 @@
   \item{} Базовые задачи поддержки.
 \end{itemize}
 
-\footnotesize{
 \begin{verbatim}
 # Сборка книги.
 #
@@ -78,8 +77,8 @@ make-depend := bin/make-depend
 m4-macros := text/macros.m4
 
 # $(call process-includes, input-file, output-file)
-# Осуществляет удаление символов табуляции, подстановку
-# макросов и обработку директив включения.
+# Осуществляет замену символов табуляции прбелами,
+# подстановку макросов и обработку директив включения.
 define process-includes
   expand $1 |                                             \
   $(M4) --prefix-builtins --include=text $(m4-macros) - | \
@@ -169,7 +168,7 @@ ALL_XML_SRC      := $(wildcard $(SOURCE_DIR)/*.xml)
 ALL_XML_OUT      := $(call source-to-output,$(ALL_XML_SRC))
 DEPENDENCY_FILES := $(call source-to-output,\
                            $(subst .xml,.d,$(ALL_XML_SRC)))
-# xml/html/pdf - Производит желаемые конечный формат книги.
+# xml/html/pdf - Производит желаемые конечные форматы книги.
 .PHONY: xml html pdf
 xml:  $(OUTPUT_DIR)/validate
 html: $(BOOK_HTML_OUT)
@@ -479,12 +478,11 @@ ifneq "$(MAKECMDGOALS)" "clean"
                   $(wildcard $(EXAMPLES_DIR)/ch*)),                     \
                 -e $(OUTPUT_DIR)/$d &) -e . ]];                         \
       then                                                              \
-        echo Компоновка примеров... > /dev/stderr;                      \
+        echo Компоновка примеров... > /dev/stderr;                \
         $(LNDIR) $(BOOK_DIR)/$(EXAMPLES_DIR) $(BOOK_DIR)/$(OUTPUT_DIR); \
       fi)
 endif
 \end{verbatim}
-}
 
 Этот \Makefile{} написан для запуска в Cygwin без серьёзных претензий
 на переносимость в \UNIX{}. Тем не менее, я уверен, что в нём очень
@@ -524,7 +522,6 @@ endif
 Создание каталога с символическими ссылками осуществляется следующим
 кодом, находящимся в конце \makefile{а}:
 
-\footnotesize{
 \begin{verbatim}
 ifneq "$(MAKECMDGOALS)" "clean"
   _CREATE_OUTPUT_DIR :=                                                 \
@@ -536,12 +533,11 @@ ifneq "$(MAKECMDGOALS)" "clean"
                   $(wildcard $(EXAMPLES_DIR)/ch*)),                     \
                 -e $(OUTPUT_DIR)/$d &) -e . ]];                         \
       then                                                              \
-        echo Компоновка примеров... > /dev/stderr;                      \
+        echo Компоновка примеров... > /dev/stderr;                \
         $(LNDIR) $(BOOK_DIR)/$(EXAMPLES_DIR) $(BOOK_DIR)/$(OUTPUT_DIR); \
       fi)
 endif
 \end{verbatim}
-}
 
 Этот код осуществляет одно присваивание простой переменной, обёрнутое
 в директиву условной обработки \directive{ifneq}. Условная директива
@@ -574,7 +570,6 @@ endif
 файла, \filename{make.out} и \filename{run.out}. Это выполняется для
 \filename{.out} файлов всех примеров следущей функцией:
 
-\footnotesize{
 \begin{verbatim}
 # $(call generic-program-example,example-directory)
 # Создаёт общие правила сборки примера.
@@ -603,24 +598,229 @@ define generic-program-example
       printf "#! /bin/bash -x\nmake\n" > $$@
 endef
 \end{verbatim}
-}
 
 Эта функция должна быть вызвана единожды с именем каталога каждого
 примера в качестве аргумента:
 
-\footnotesize{
 \begin{verbatim}
 $(eval $(call generic-program-example,ch01-bogus-tab))
 $(eval $(call generic-program-example,ch01-cw1))
 $(eval $(call generic-program-example,ch01-hello))
 $(eval $(call generic-program-example,ch01-cw2))
 \end{verbatim}
-}
 
 %---------------------------------------------------------------------
 % XML Processing
 %---------------------------------------------------------------------
 \subsection{Обработка XML}
+
+Рискуя выставить себя перед потомками в дурном свете, хочу сообщить,
+что я не очень люблю формат XML. Я нахожу его неуклюжим и
+многословным. Поэтому когда я узнал, что рукопись должна быть написана
+в DocBook, я начал поиск более традиционных инструментов, которые
+смогли бы упростить мою работу. Препроцессор \utility{m4} и
+\utility{awk}~--- это два инструмента, которые мне очень помогли.
+
+Есть две проблемы, связанные с DocBook и XML, с которыми \utility{m4}
+отлично справляется: неудобство многословного синтаксиса XML и
+необходимость управления идентификаторами, используемыми в
+перекрёстных ссылках. К примеру, чтобы выделить слово в DocBook, вам
+нужно написать:
+
+\begin{verbatim}
+<emphasis>not</emphasis>
+\end{verbatim}
+
+Используя \utility{m4}, я написал простой макрос, позволяющий записать
+тоже самое следующим образом:
+
+\begin{verbatim}
+mp_em(not)
+\end{verbatim}
+
+Да, так уже лучше. В добавок я ввёл множество символических стилей
+форматирования, таких как \command{mp\_variable} и
+\command{mp\_target}. Это позволило мне выбрать тривиальный формат для
+этих сущностей (к примеру, отсутсвие выделения) и изменять его позже
+по желанию редактора без необходимости осуществлять поиск и замену по
+всему документу.
+
+Возможно, поклонники XML завалят меня письмами с описанием решения
+этой задачи средствами XML (с помощью XML-сущностей или чего-нибудь в
+этом роде). Однако не стоит забывать, что \UNIX{} нужен, чтобы решать
+текущие задачи теми инструментами, которые у тебя есть. Как любит
+говорить Ларри Уолл (Larry Wall), <<Есть более одного способа сделать
+это>>(<<There is more then one way to do it>>). Кроме того, я
+опасаюсь, что чрезмерное изучение XML заморочит мне голову.
+
+Вторая задача для \utility{m4}~--- управление XML-идентификаторами,
+используемыми в перекрёстных ссылках. Каждая глава, раздел, пример и
+таблица имеют свой идентификатор:
+
+\begin{verbatim}
+<sect1 id="MPWM-CH-7-SECT-1">
+\end{verbatim}
+
+Ссылки на раздел должны использовать этот идентификатор. С точки
+зрения программирования эта проблема довольно ясна. Идентификаторы
+являются сложными константами, расбросанными по всему <<коду>>. Более
+того, символы сами по себе не имеют значения. Я не имею понятия, о чём
+может идти речь в первом разделе седьмой главы. Используя
+\utility{m4}, я могу избежать дублирования сложных идентификаторов,
+используя вместо них имеющие смысл имена:
+
+\begin{verbatim}
+<sect1 id="mp_se_makedepend">
+\end{verbatim}
+
+Что более важно, при смене нумерации разделов или глав (что в процессе
+написания книги происходило много раз) идентификатор нужно будет
+поменять только в одном файле. Это преимущество наиболее ощутимо при
+смене нумерации разделов в главе. Подобная операция может потребовать
+полдесятка операций поиска и замены по всем файлам, в которых я не
+ввёл символические ссылки.
+
+Вот несколько примеров макросов \utility{m4}\AuthorFootnote{Префикс
+  \command{mp} является сокращением Managing Projects (название
+  книги), слова macro processor (макро-процессор) или make pretty
+  (буквально <<сделай красивым>>). Выберите наиболее понравившийся вам
+  вариант}:
+\begin{verbatim}
+m4_define(`mp_tag',    `<$1>`$2'</$1>')
+m4_define(`mp_lit',    `mp_tag(literal, `$1')')
+m4_define(`mp_cmd',    `mp_tag(command,`$1')')
+m4_define(`mp_target', `mp_lit($1)')
+m4_define(`mp_all',    `mp_target(all)')
+m4_define(`mp_bash',   `mp_cmd(bash)')
+m4_define(`mp_ch_examples',     `MPWM-CH-11')
+m4_define(`mp_se_book',         `MPWM-CH-11.1')
+m4_define(`mp_ex_book_makefile',`MPWM-CH-11-EX-1')
+\end{verbatim}
+
+Ещё одной задачей предварительной обработки была реализация
+возможности включения текста примеров. Этот текст требует замены
+символов табуляций пробелами (посколько конвертер DocBook O'Reilly не
+может обрабатывать символы табуляции, а в \makefile{ах} их полно),
+обёртки содержимого в \verb|<![CDATA[...]]>| для экранирования
+специальных символов, и, наконец, отсечения лишних символов переноса
+строки в начале и конце текста примеров. Я смог решить эту задачу
+благодаря следующей небольшой программе на \utility{awk}, которую я
+назвал \utility{process-includes}:
+
+\begin{verbatim}
+#! /usr/bin/awk -f
+function expand_cdata( dir )
+{
+  start_place = match( $1, "include-" )
+  if ( start_place > 0 )
+  {
+    prefix = substr( $1, 1, start_place - 1 )
+  }
+  else
+  {
+    print "Bogus include '" $0 "'" > "/dev/stderr"
+  }
+  end_place = match( $2, "(</(programlisting|screen)>.*)$", tag )
+
+  if ( end_place > 0 )
+  {
+    file = dir substr( $2, 1, end_place - 1 )
+  }
+  else
+  {
+    print "Bogus include '" $0 "'" > "/dev/stderr"
+  }
+
+  command = "expand " file
+
+  printf "%s>&33;&91;CDATA[", prefix
+  tail = 0
+  previous_line = ""
+  while ( (command | getline line) > 0 )
+  {
+    if ( tail )
+      print previous_line;
+
+    tail = 1
+    previous_line = line
+  }
+
+  printf "%s&93;&93;&62;%s\n", previous_line, tag[1]
+  close( command )
+}
+
+/include-program/ {
+  expand_cdata( "examples/" )
+  next;
+}
+
+/include-output/ {
+  expand_cdata( "out/" )
+  next;
+}
+
+/<(programlisting|screen)> *$/ {
+  # Find the current indentation.
+  offset = match( $0, "<(programlisting|screen)>" )
+
+  # Strip newline from tag.
+  printf $0
+
+  # Read the program...
+  tail = 0
+  previous_line = ""
+  while ( (getline line) > 0 )
+  {
+    if ( line ~ "</(programlisting|screen)>" )
+    {
+      gsub( /^ */, "", line )
+      break
+    }
+    if ( tail )
+      print previous_line
+
+    tail = 1
+    previous_line = substr( line, offset + 1 )
+  }
+
+  printf "%s%s\n", previous_line, line
+
+  next
+}
+
+{
+  print
+}
+\end{verbatim}
+
+Сначала в \makefile{е} мы копируем XML-файлы из дерева каталогов с
+исходными файлами в каталог с выходными файлами, заменяем символы
+табуляции пробелами, производим подстановку макросов и производим
+включение файлов примеров:
+
+\begin{verbatim}
+process-pgm := bin/process-include
+m4-macros   := text/macros.m4
+
+# $(call process-includes, input-file, output-file)
+# Осуществляет замену символов табуляции прбелами,
+# подстановку макросов и обработку директив включения.
+define process-includes
+  expand $1 |                                             \
+  $(M4) --prefix-builtins --include=text $(m4-macros) - | \
+  $(process-pgm) > $2
+endef
+
+vpath %.xml $(SOURCE_DIR)
+
+$(OUTPUT_DIR)/%.xml: %.xml $(process-pgm) $(m4-macros)
+    $(call process-includes, $<, $@)
+\end{verbatim}
+
+Шаблонное правило определяет способ составления выходного XML-файла из
+исходного XML-файла. Оно также утвержает, что все выходные XML-файлы
+должны быть составлены заново, если макросы или файл сценария
+включения изменились.
 
 %---------------------------------------------------------------------
 % Generating Output
