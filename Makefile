@@ -39,35 +39,13 @@ WGET       := wget
 LATEX_ARGS := --interaction batchmode
 SILENCE    := &>/dev/null
 
-define parse-log
-  $(PYTHON) ./src/python/parse-log.py $1
-endef
-
-define insure-dir-exists
-  if [ ! -d $1 ]; then $(MKDIR) $1; fi
-endef
-
-define insure-prog-exists
-  echo -n "Checking for $1... "; \
-  if which $1 &> /dev/null;      \
-    then echo "Ok. :]";          \
-    else echo "NOT FOUND.";      \
-         echo "Exiting. :[";     \
-         exit 1;                 \
-  fi
-endef
-
-define download-file-to-dir
-  $(WGET) --directory-prefix $2 $1;
-endef
-
-define original-chapter
-  http://oreilly.com/catalog/make3/book/ch$(1).pdf
-endef
+parse-log = $(PYTHON) ./src/python/parse-log.py $1
+ensure-dir-exists = if [ ! -d $1 ]; then $(MKDIR) $1; fi
+download-file-to-dir = $(WGET) --directory-prefix $2 $1;
+original-chapter = http://oreilly.com/catalog/make3/book/ch$(1).pdf
 
 $(MAIN).pdf: $(tex_files) $(MAIN).ind
-	$(LATEX) $(LATEX_ARGS) $(main_tex) $(SILENCE)
-	$(call parse-log,$(MAIN).log)
+	$(LATEX) $(LATEX_ARGS) $(main_tex)
 
 .PHONY: release
 release: $(RELEASE)
@@ -83,7 +61,7 @@ $(MAIN).ind: $(MAIN).idx
 	$(MAKE_INDEX) $< $(SILENCE)
 
 $(MAIN).idx: $(tex_files) $(figures)
-	$(LATEX) $(LATEX_ARGS) $(main_tex) $(SILENCE)
+	$(LATEX) $(LATEX_ARGS) $(main_tex)
 
 $(figures_dir)/%.eps: $(figures_dir)/%.mp
 	@echo making figure $@...
@@ -113,8 +91,7 @@ count:
 
 .PHONY: download-origin
 download-origin:
-	$(call insure-prog-exists,$(WGET))
-	$(call insure-dir-exists,$(ORIGIN_DIR))
+	$(call ensure-dir-exists,$(ORIGIN_DIR))
 	for ch in {01..12}; do                                           \
 	  $(call download-file-to-dir,$(call original-chapter,"$${ch}"), \
                                       $(ORIGIN_DIR))                     \
