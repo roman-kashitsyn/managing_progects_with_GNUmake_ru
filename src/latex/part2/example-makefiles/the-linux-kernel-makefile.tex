@@ -203,7 +203,175 @@ mixed-targets  := 0
 dot-config     := 1
 \end{verbatim}
 
-% TODO(rkashitsyn): Missing text
+Переменная \variable{no-dot-config-targets} перечисляет дополнительные
+цели, не требующие наличие файла \filename{.config}. Затем
+инициализируются переменные \variable{config-targets},
+\variable{mixed-targets} и \variable{dot-config}. Переменная
+\variable{config-targets} равна единице, если в командной строке
+указаны цели, отвечающие за конфигурацию. Переменная
+\variable{dot-config} равна единице, если в командной строке указаны
+цели, отвечающие за сборку ядра. Наконец, переменная
+\variable{mixed-targets} равна 1, если были указаны оба типа целей.
+
+Код определения \variable{dot-config} выглядит следующим образом:
+
+\begin{verbatim}
+ifneq ($(filter $(no-dot-config-targets), $(MAKECMDGOALS)),)
+  ifeq ($(filter-out $(no-dot-config-targets), $(MAKECMDGOALS)),)
+    dot-config := 0
+  endif
+endif
+\end{verbatim}
+
+Выражение \function{filter} будет непустым если значение
+\variable{MAKECMDGOALS} содержит конфигурационные цели. Выражение
+\directive{ifneq} будет истинным если результат вычисления
+\function{filter} будет непустым. Код довольно сложно читать, в
+частности, из-за наличия двойного отрицания. Выражение
+\directive{ifeq} истинно, если значение \variable{MAKECMDGOALS}
+содержит только конфигурационные цели. Таким образом, переменная
+\variable{dot-config} будет выставлена в 0 если значение
+\variable{MAKECMDGOALS} содержит только конфигурационные цели. Более
+многословная реализация может прояснить значение этих двух условий:
+
+\begin{verbatim}
+config-target-list := clean mrproper distclean \
+                      cscope TAGS tags help %docs check%
+
+config-target-goal := $(filter $(config-target-list), $(MAKECMDGOALS))
+build-target-goal := $(filter-out $(config-target-list), $(MAKECMDGOALS))
+
+ifdef config-target-goal
+  ifndef build-target-goal
+    dot-config := 0
+  endif
+endif
+\end{verbatim}
+
+Использовать \directive{ifdef} вместо \function{ifndef} допустимо,
+поскольку переменные с пустым значение трактуются как неопределённые,
+однако надо быть аккуратным и убедиться, что значение переменной не
+содержит пробелов (что сделает её определённой).
+
+Переменные \variable{config-targets} и \variable{mixed-targets}
+выставляются в следующем блоке кода:
+
+\begin{verbatim}
+ifeq ($(KBUILD_EXTMOD),)
+  ifneq ($(filter config %config,$(MAKECMDGOALS)),)
+    config-targets := 1
+    ifneq ($(filter-out config %config,$(MAKECMDGOALS)),)
+      mixed-targets := 1
+    endif
+  endif
+endif
+\end{verbatim}
+
+Значение переменной \variable{KBUILD\_EXTMOD} будет непустым только
+если происходит сборка внешних модулей, во время обычных сборок она
+не будет определена. Условие в первой директиве \directive{ifneq} будет
+истинным, если значение переменной \variable{MAKECMDGOALS} содержит
+цель с суффиксом \filename{config}. Условие во второй директиве
+\directive{ifneq} будет истинным, если значение переменной
+\variable{MAKECMDGOALS} содержит также и конфигурационные цели.
+
+Определённые таким образом переменные используются в цепочке
+\directive{if-else} в четырёх условных ветках. Код сокращен и
+отформатирован для выделения его структуры:
+
+\begin{verbatim}
+ifeq ($(mixed-targets),1)
+  # make вызван со смешанным набором целей (конфигурационные и сборочные).
+  # Обрабатываем их одну за другой.
+  %:: FORCE
+      $(Q)$(MAKE) -C $(srctree) KBUILD_SRC= $@
+else
+  ifeq ($(config-targets),1)
+    # Указаны только конфигурационные цели. Убеждаемся, что реквизиты
+    # обновлены, и запускаем рекурсивную сборку в scripts/kconfig для
+    # сборки конфигурационных целей.
+    %config: scripts_basic FORCE
+        $(Q)$(MAKE) $(build)=scripts/kconfig $@
+  else
+    # Указаны только сборочные цели - это включает vmlinux, цели, зависящие
+    # от архитектуры, clean и др. Это практически все цели, за исключением
+    # целей с суффиксом config.
+    ...
+    ifeq ($(dot-config),1)
+      # В этой секции нам потребуется .config
+      # Считываем зависимости ко всем Kconfig-файлам, убеждаемся,
+      # что oldconfig запущен при наличии изменений.
+      -include .config.cmd
+      include .config
+
+      # Если .config требует пересборки, её нужно сделать через зависимость
+      # autoconf от .config.
+      # Чтобы избежать работы любых неявных правил, определим пустую комманду.
+      .config: ;
+
+      # Если .config модифицирован позднее include/linux/autoconf.h, кто-то
+      # ковырялся в нём и забыл запустить make oldconfig.
+      include/linux/autoconf.h: .config
+          $(Q)$(MAKE) -f $(srctree)/Makefile silentoldconfig
+    else
+      # Цель без тела для использования в качестве реквизита
+      include/linux/autoconf.h: ;
+    endif
+    include $(srctree)/arch/$(ARCH)/Makefile
+    ... очень много make-кода ...
+  endif #ifeq ($(config-targets),1)
+endif #ifeq ($(mixed-targets),1)
+\end{verbatim}
+
+Первая ветка, \command{ifeq (\$(mixed-targets),1)}, обрабатывает
+случай смешанных целей в списке аргументов. Единственная цель в этой
+ветке~--- общее шаблонное правило. Поскольку специфические правила для
+обработки целей не определены (они все находятся в других ветках
+условных директив), каждая цель вызывает однократное срабатывание
+общего шаблонного правила. Таким образом, смешанный набор целей
+разделяется на несколько более простых, и для каждой цели рекурсивно
+вызывается \GNUmake{}, который снова применяет ту же логику (только в
+этот раз командная строка не будет содержать смешанного набора
+целей). Вместо \target{.PHONY} используется реквизит \target{FORCE},
+поскольку шаблонное правило вида
+
+\begin{verbatim}
+%:: FORCE
+\end{verbatim}
+
+не может быть объявлено \target{.PHONY}. Поэтому выглядит логичным
+использовать \target{FORCE} вместо \target{.PHONY} во всём
+\makefile{е}.
+
+Вторая ветка цепочки \directive{if-else}, \command{ifeq
+  (\$(config-targets),1)}, вызывается, если в командной строке
+присутствуют только конфигурационные цели. Единственным правилом в
+этой ветке является шаблонное правило
+\command{\%command}. Соответствующая этому правилу команда рекурсивно
+вызывает \GNUmake{} в подкаталоге \filename{scripts/kconfig} и
+передаёт цель в качестве аргумента. Конструкция \command{\$(build)}
+определена в конце \makefile{а}:
+
+\begin{verbatim}
+# Сокращение для $(Q)$(MAKE) -f scripts/Makefile.build obj=dir
+# Использование:
+# $(Q)$(MAKE) $(build)=dir
+build := -f $(if $(KBUILD_SRC),$(srctree)/)scripts/Makefile.build obj
+\end{verbatim}
+
+Если переменная \variable{KBUILD\_SRC} определена, опция \command{-f}
+задаёт абсолютный путь к \makefile{у}, в противном случае используется
+относительный путь. При раскрытии макроса переменной \variable{obj}
+будет присвоено значение справа от \command{\$(build)=}.
+
+В третьей ветке, \command{ifeq (\$(dot-config),1)}, обрабатывает цели,
+требующие включения двух генерируемых конфигурационных файлов,
+\filename{.config} и \filename{.config.cmd}. Последняя ветка включает
+цель без тела \target{autoconf.h} для использования её в качестве
+реквизита, даже если соответсвтующий файл не существует.
+
+Оставшаяся часть \makefile{а} отвечает третьей и четвёртой условной
+ветке и содержит код сборки ядра и его модулей.
 
 %---------------------------------------------------------------------
 % Managing Command Echo
